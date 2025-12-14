@@ -5,7 +5,7 @@ Hybrid Quantum–Classical Graph Neural Networks for Recommender Systems. Experi
 **Danial K.T.M.**
 
 ## Supervisor
-**Alexandr**
+**Alexander**
 
 ## Degree Program
 Master’s Thesis
