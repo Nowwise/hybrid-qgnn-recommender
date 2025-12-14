@@ -2,13 +2,13 @@
 Hybrid Quantum–Classical Graph Neural Networks for Recommender Systems. Experiments comparing LightGCN and a Hybrid QGNN model, including full benchmark code, metrics, and reproducible pipelines.
 
 ## Student
-**[Your Full Name]**
+**Danial K.T.M.**
 
 ## Supervisor
-**[Supervisor Full Name]**
+**Alexandr**
 
 ## Degree Program
-Master’s Thesis (ВКР)
+Master’s Thesis
 
 ---
 
