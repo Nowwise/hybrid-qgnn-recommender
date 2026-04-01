@@ -13,13 +13,32 @@ export type JobStep = {
   status: "pending" | "running" | "done" | "error";
 };
 
+export type JobActivity = {
+  model?: string | null;
+  split?: string | null;
+  phase?: string | null;
+  epoch?: number | null;
+  batch?: number | null;
+  total_batches?: number | null;
+  loss?: number | null;
+  p_quantum?: number | null;
+};
+
+export type JobEvent = {
+  ts: string;
+  kind: string;
+  message: string;
+};
+
 export type JobPublic = {
   id: string;
-  status: "queued" | "running" | "completed" | "failed";
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
   phase: string;
   detail: string | null;
   progress_pct: number;
   steps: JobStep[];
+  activity: JobActivity | null;
+  events: JobEvent[];
   created_at: string;
   updated_at: string;
   error: string | null;
@@ -36,8 +55,11 @@ export type RunSummary = {
 };
 
 export type ExperimentPresets = {
-  quick: Record<string, unknown>;
-  full: Record<string, unknown>;
+  lightweight: Record<string, unknown>;
+  notebook: Record<string, unknown>;
+  custom: Record<string, unknown>;
+  quick?: Record<string, unknown>;
+  full?: Record<string, unknown>;
 };
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -69,6 +91,13 @@ export function startExperiment(body: Record<string, unknown>) {
   return fetchJson<JobPublic>("/experiments/runs", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export function cancelExperimentJob(id: string) {
+  return fetchJson<JobPublic>(`/experiments/jobs/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+    body: "{}",
   });
 }
 

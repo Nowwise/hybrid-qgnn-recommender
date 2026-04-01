@@ -30,10 +30,12 @@ class HybridQGNN(nn.Module):
     def set_p_quantum(self, p):
         self.p_quantum = float(p)
 
-    def forward(self, u, i, micro_bs=32):
+    def forward(self, u, i, micro_bs=32, force_classical: bool = False):
         all_emb = self.encoder.propagate()
         x = torch.cat([all_emb[u], all_emb[self.encoder.n_users + i]], dim=-1)
-        if self.training and self.p_quantum < 1.0:
+        if force_classical:
+            zq = self.fallback(x)
+        elif self.training and self.p_quantum < 1.0:
             mask = torch.rand(x.size(0), device=x.device) < self.p_quantum
             zq = torch.empty(x.size(0), self.quantum.q, device=x.device, dtype=x.dtype)
             if mask.any():

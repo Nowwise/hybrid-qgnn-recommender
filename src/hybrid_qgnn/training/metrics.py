@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,7 @@ import torch.nn as nn
 from sklearn.metrics import roc_auc_score
 
 from hybrid_qgnn.models.hybrid import HybridQGNN
+from hybrid_qgnn.exceptions import ExperimentCancelled
 
 
 class MetricsLogger:
@@ -63,6 +64,8 @@ def eval_metrics(
     model_name=None,
     split="val",
     use_amp: bool = True,
+    on_val_batch: Optional[Callable[[int, int], None]] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
 ) -> Tuple[dict, float]:
     import time
 
@@ -70,7 +73,10 @@ def eval_metrics(
     ys, ps = [], []
     t0 = time.time()
     amp_enabled = use_amp and device.type == "cuda"
-    for u, i, y in loader:
+    n_batches = len(loader)
+    for bi, (u, i, y) in enumerate(loader, start=1):
+        if cancel_check and cancel_check():
+            raise ExperimentCancelled()
         u = u.to(device, non_blocking=True) if device.type == "cuda" else u.to(device)
         i = i.to(device, non_blocking=True) if device.type == "cuda" else i.to(device)
         y = y.to(device, non_blocking=True) if device.type == "cuda" else y.to(device)
@@ -79,6 +85,8 @@ def eval_metrics(
             prob = torch.sigmoid(logit).cpu().numpy()
         ys.append(y.cpu().numpy())
         ps.append(prob)
+        if on_val_batch:
+            on_val_batch(bi, n_batches)
 
     if not ys:
         dur = time.time() - t0

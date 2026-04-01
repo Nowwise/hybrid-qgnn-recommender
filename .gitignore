@@ -13,3 +13,7 @@ runs/
 node_modules/
 frontend/dist/
 *.tsbuildinfo
+
+# Local thesis / coursework context (do not publish)
+thesis_coursework_full_context.md
+**/thesis_coursework_full_context.md

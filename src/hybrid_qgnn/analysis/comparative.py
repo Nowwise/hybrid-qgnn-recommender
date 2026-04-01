@@ -63,13 +63,34 @@ def build_comparative_from_metrics_dir(save_dir: Path) -> Tuple[Optional[pd.Data
     return disp_comp, wide
 
 
+def write_ranking_comparative(save_dir: Path) -> Optional[Path]:
+    """Pivot val_ranking / test_ranking rows from metrics.csv into a wide table."""
+    save_dir = Path(save_dir)
+    metrics_csv = save_dir / "metrics.csv"
+    if not metrics_csv.exists():
+        return None
+    df = pd.read_csv(metrics_csv)
+    sub = df[df["split"].isin(("val_ranking", "test_ranking"))].copy()
+    if sub.empty:
+        return None
+    wide = sub.pivot_table(index=["model", "split"], columns="metric", values="value", aggfunc="first")
+    wide = wide.reset_index()
+    p = save_dir / "ranking_comparative.csv"
+    wide.to_csv(p, index=False)
+    return p
+
+
 def write_comparative_tables(save_dir: Path) -> Optional[List[Path]]:
     save_dir = Path(save_dir)
     disp_comp, wide = build_comparative_from_metrics_dir(save_dir)
-    if disp_comp is None or wide is None:
-        return None
-    p1 = save_dir / "val_best_comparative.csv"
-    p2 = save_dir / "val_metrics_per_epoch.csv"
-    disp_comp.to_csv(p1, index=False)
-    wide.to_csv(p2, index=False)
-    return [p1, p2]
+    out: List[Path] = []
+    if disp_comp is not None and wide is not None:
+        p1 = save_dir / "val_best_comparative.csv"
+        p2 = save_dir / "val_metrics_per_epoch.csv"
+        disp_comp.to_csv(p1, index=False)
+        wide.to_csv(p2, index=False)
+        out.extend([p1, p2])
+    rk = write_ranking_comparative(save_dir)
+    if rk is not None:
+        out.append(rk)
+    return out if out else None

@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from app.core.settings import Settings, get_settings
-from app.schemas.experiment import ExperimentStartBody, JobPublic, RunSummary
-from app.services.jobs import get_job, list_jobs, submit_training
+from app.schemas.experiment import ExperimentStartBody, JobPublic, JobStatus, RunSummary
+from app.services.jobs import cancel_job, get_job, list_jobs, submit_training
 from app.services.runs import list_runs, read_run_config
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
@@ -19,8 +19,13 @@ router = APIRouter(prefix="/experiments", tags=["experiments"])
 def _base_from_body(body: ExperimentStartBody):
     from hybrid_qgnn.config import ExperimentConfig
 
-    if body.quick_demo or (body.preset or "").lower() == "quick":
-        return ExperimentConfig.quick_demo()
+    if body.quick_demo:
+        return ExperimentConfig.lightweight()
+    p = (body.preset or "").lower()
+    if p in ("quick", "lightweight", "light"):
+        return ExperimentConfig.lightweight()
+    if p in ("notebook", "balanced", "balanced_cpu"):
+        return ExperimentConfig.notebook_balanced()
     return ExperimentConfig()
 
 
@@ -57,6 +62,10 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
         cfg.L = body.L
     if body.lr is not None:
         cfg.lr = body.lr
+    if body.lightgcn_lr is not None:
+        cfg.lightgcn_lr = body.lightgcn_lr
+    if body.hybrid_lr is not None:
+        cfg.hybrid_lr = body.hybrid_lr
     if body.wd is not None:
         cfg.wd = body.wd
     if body.eval_every is not None:
@@ -71,9 +80,22 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
         cfg.p_quantum_end = body.p_quantum_end
     if body.seed is not None:
         cfg.seed = body.seed
+    if body.eval_ranking is not None:
+        cfg.eval_ranking = body.eval_ranking
+    if body.ranking_max_users is not None:
+        cfg.ranking_max_users = body.ranking_max_users
+    if body.ranking_negatives is not None:
+        cfg.ranking_negatives = body.ranking_negatives
+    if body.eval_test_ranking is not None:
+        cfg.eval_test_ranking = body.eval_test_ranking
+    if body.eval_hybrid_ablation is not None:
+        cfg.eval_hybrid_ablation = body.eval_hybrid_ablation
+    if body.log_phase_timings is not None:
+        cfg.log_phase_timings = body.log_phase_timings
 
-    is_quick = body.quick_demo or (body.preset or "").lower() == "quick"
-    if is_quick and body.save_dir is None:
+    p = (body.preset or "").lower()
+    is_light = body.quick_demo or p in ("quick", "lightweight", "light")
+    if is_light and body.save_dir is None:
         cfg.save_dir = f"./runs/quick_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
     return cfg
@@ -83,9 +105,15 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
 def experiment_presets():
     from hybrid_qgnn.config import ExperimentConfig
 
+    lw = ExperimentConfig.lightweight().to_dict()
+    nb = ExperimentConfig.notebook_balanced().to_dict()
+    cu = ExperimentConfig().to_dict()
     return {
-        "quick": ExperimentConfig.quick_demo().to_dict(),
-        "full": ExperimentConfig().to_dict(),
+        "lightweight": lw,
+        "notebook": nb,
+        "custom": cu,
+        "quick": lw,
+        "full": cu,
     }
 
 
@@ -101,7 +129,11 @@ def start_run(body: ExperimentStartBody, settings: Settings = Depends(get_settin
             detail=f"Dataset not found. Expected {cfg.data_dir}/train.txt and test.txt under project root.",
         )
 
-    def run(_job_id: str, on_progress: Callable[[Dict[str, Any]], None]) -> dict[str, Any]:
+    def run(
+        _job_id: str,
+        on_progress: Callable[[Dict[str, Any]], None],
+        cancel_ev,
+    ) -> dict[str, Any]:
         from hybrid_qgnn.training import run_experiment
 
         return run_experiment(
@@ -109,9 +141,22 @@ def start_run(body: ExperimentStartBody, settings: Settings = Depends(get_settin
             project_root=settings.project_root,
             on_progress=on_progress,
             show_progress=False,
+            cancel_event=cancel_ev,
         )
 
     return submit_training(run)
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobPublic)
+def cancel_experiment_job(job_id: str):
+    j = get_job(job_id)
+    if not j:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if j.status not in (JobStatus.queued, JobStatus.running):
+        raise HTTPException(status_code=400, detail="Job is not queued or running")
+    cancel_job(job_id)
+    out = get_job(job_id)
+    return out if out else j
 
 
 @router.get("/jobs", response_model=List[JobPublic])

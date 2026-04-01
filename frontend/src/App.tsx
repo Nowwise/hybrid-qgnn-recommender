@@ -22,10 +22,12 @@ export function App() {
     selectedRun,
     err,
     starting,
+    cancelling,
     datasetReady,
     presets,
     refresh,
     runExperiment,
+    cancelRun,
     onSelectRun,
   } = useDashboard();
 
@@ -91,8 +93,10 @@ export function App() {
           presets={presets}
           datasetReady={datasetReady}
           starting={starting}
+          cancelling={cancelling}
           activeJob={activeJob}
           onRun={(body) => void runExperiment(body)}
+          onCancel={(id) => void cancelRun(id)}
         />
 
         {err && (

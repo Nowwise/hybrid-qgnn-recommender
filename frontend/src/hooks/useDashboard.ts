@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  cancelExperimentJob,
   getComparative,
   getDatasetStatus,
   getExperimentPresets,
@@ -25,6 +26,7 @@ export function useDashboard() {
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const refresh = useCallback(async () => {
     setErr(null);
@@ -50,12 +52,13 @@ export function useDashboard() {
 
   useEffect(() => {
     const id = activeJob?.id;
-    if (!id || activeJob.status === "completed" || activeJob.status === "failed") return;
+    if (!id || activeJob.status === "completed" || activeJob.status === "failed" || activeJob.status === "cancelled")
+      return;
     const t = setInterval(async () => {
       try {
         const j = await getJob(id);
         setActiveJob(j);
-        if (j.status === "completed" || j.status === "failed") {
+        if (j.status === "completed" || j.status === "failed" || j.status === "cancelled") {
           void refresh();
         }
       } catch {
@@ -81,6 +84,20 @@ export function useDashboard() {
     }
   };
 
+  const cancelRun = async (jobId: string) => {
+    setErr(null);
+    setCancelling(true);
+    try {
+      const j = await cancelExperimentJob(jobId);
+      setActiveJob(j);
+      void refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Cancel failed");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const onSelectRun = async (runId: string) => {
     setSelectedRun(runId);
     setComparative(null);
@@ -102,9 +119,11 @@ export function useDashboard() {
     selectedRun,
     err,
     starting,
+    cancelling,
     datasetReady,
     refresh,
     runExperiment,
+    cancelRun,
     onSelectRun,
   };
 }
