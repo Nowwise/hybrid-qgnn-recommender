@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getComparative,
   getDatasetStatus,
+  getExperimentPresets,
   getHealth,
   getJob,
   listHistory,
   listJobs,
-  startRun,
+  startExperiment,
   type DatasetStatus,
+  type ExperimentPresets,
   type JobPublic,
   type RunSummary,
 } from "../api";
@@ -15,6 +17,7 @@ import {
 export function useDashboard() {
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [dataset, setDataset] = useState<DatasetStatus | null>(null);
+  const [presets, setPresets] = useState<ExperimentPresets | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [jobs, setJobs] = useState<JobPublic[]>([]);
   const [activeJob, setActiveJob] = useState<JobPublic | null>(null);
@@ -33,6 +36,7 @@ export function useDashboard() {
     }
     try {
       setDataset(await getDatasetStatus());
+      setPresets(await getExperimentPresets());
       setHistory(await listHistory());
       setJobs(await listJobs());
     } catch (e) {
@@ -57,17 +61,17 @@ export function useDashboard() {
       } catch {
         /* ignore poll errors */
       }
-    }, 2000);
+    }, 800);
     return () => clearInterval(t);
   }, [activeJob?.id, activeJob?.status, refresh]);
 
   const datasetReady = !!(dataset?.train_txt && dataset?.test_txt);
 
-  const onStart = async (quick: boolean) => {
+  const runExperiment = async (body: Record<string, unknown>) => {
     setErr(null);
     setStarting(true);
     try {
-      const j = await startRun(quick);
+      const j = await startExperiment(body);
       setActiveJob(j);
       setJobs(await listJobs());
     } catch (e) {
@@ -90,6 +94,7 @@ export function useDashboard() {
   return {
     apiOk,
     dataset,
+    presets,
     history,
     jobs,
     activeJob,
@@ -99,7 +104,7 @@ export function useDashboard() {
     starting,
     datasetReady,
     refresh,
-    onStart,
+    runExperiment,
     onSelectRun,
   };
 }

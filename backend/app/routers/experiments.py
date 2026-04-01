@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,13 +16,16 @@ from app.services.runs import list_runs, read_run_config
 router = APIRouter(prefix="/experiments", tags=["experiments"])
 
 
-def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
+def _base_from_body(body: ExperimentStartBody):
     from hybrid_qgnn.config import ExperimentConfig
 
-    if body.quick_demo:
-        cfg = ExperimentConfig.quick_demo()
-    else:
-        cfg = ExperimentConfig()
+    if body.quick_demo or (body.preset or "").lower() == "quick":
+        return ExperimentConfig.quick_demo()
+    return ExperimentConfig()
+
+
+def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
+    cfg = _base_from_body(body)
 
     if body.save_dir is not None:
         cfg.save_dir = body.save_dir
@@ -32,12 +35,18 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
         cfg.max_users = body.max_users
     if body.max_pos_per_user is not None:
         cfg.max_pos_per_user = body.max_pos_per_user
+    if body.neg_per_pos is not None:
+        cfg.neg_per_pos = body.neg_per_pos
+    if body.val_ratio is not None:
+        cfg.val_ratio = body.val_ratio
     if body.epochs_lg is not None:
         cfg.epochs_lg = body.epochs_lg
     if body.epochs_hyb is not None:
         cfg.epochs_hyb = body.epochs_hyb
     if body.batch_size is not None:
         cfg.batch_size = body.batch_size
+    if body.micro_bs is not None:
+        cfg.micro_bs = body.micro_bs
     if body.d is not None:
         cfg.d = body.d
     if body.K is not None:
@@ -48,29 +57,57 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
         cfg.L = body.L
     if body.lr is not None:
         cfg.lr = body.lr
+    if body.wd is not None:
+        cfg.wd = body.wd
+    if body.eval_every is not None:
+        cfg.eval_every = body.eval_every
+    if body.hybrid_lr_mult is not None:
+        cfg.hybrid_lr_mult = body.hybrid_lr_mult
+    if body.backend is not None:
+        cfg.backend = body.backend
+    if body.p_quantum_start is not None:
+        cfg.p_quantum_start = body.p_quantum_start
+    if body.p_quantum_end is not None:
+        cfg.p_quantum_end = body.p_quantum_end
     if body.seed is not None:
         cfg.seed = body.seed
 
-    if body.quick_demo and body.save_dir is None:
+    is_quick = body.quick_demo or (body.preset or "").lower() == "quick"
+    if is_quick and body.save_dir is None:
         cfg.save_dir = f"./runs/quick_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
     return cfg
 
 
+@router.get("/presets")
+def experiment_presets():
+    from hybrid_qgnn.config import ExperimentConfig
+
+    return {
+        "quick": ExperimentConfig.quick_demo().to_dict(),
+        "full": ExperimentConfig().to_dict(),
+    }
+
+
 @router.post("/runs", response_model=JobPublic)
 def start_run(body: ExperimentStartBody, settings: Settings = Depends(get_settings)):
-    ds = settings.project_root / "amazon-book"
-    if not (ds / "train.txt").is_file() or not (ds / "test.txt").is_file():
-        raise HTTPException(status_code=400, detail="Dataset not found. Expected amazon-book/train.txt and test.txt.")
+    cfg = _merge_experiment_config(body, settings)
+    data_root = settings.project_root / cfg.data_dir
+    train_f = data_root / "train.txt"
+    test_f = data_root / "test.txt"
+    if not train_f.is_file() or not test_f.is_file():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dataset not found. Expected {cfg.data_dir}/train.txt and test.txt under project root.",
+        )
 
-    def run(_job_id: str, on_progress: Callable[..., None]) -> dict[str, Any]:
+    def run(_job_id: str, on_progress: Callable[[Dict[str, Any]], None]) -> dict[str, Any]:
         from hybrid_qgnn.training import run_experiment
 
-        cfg = _merge_experiment_config(body, settings)
         return run_experiment(
             cfg,
             project_root=settings.project_root,
-            on_phase=lambda phase, detail: on_progress(phase, detail),
+            on_progress=on_progress,
             show_progress=False,
         )
 

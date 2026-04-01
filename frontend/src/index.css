@@ -71,6 +71,10 @@ body {
   min-height: 100vh;
 }
 
+.mono {
+  font-family: var(--font-mono);
+}
+
 button {
   font-family: inherit;
   cursor: pointer;

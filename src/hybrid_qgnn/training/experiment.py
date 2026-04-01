@@ -19,6 +19,7 @@ from hybrid_qgnn.data import (
 from hybrid_qgnn.models import HybridQGNN, LightGCNLite
 from hybrid_qgnn.training.loops import train_epoch
 from hybrid_qgnn.training.metrics import MetricsLogger, eval_metrics
+from hybrid_qgnn.training.progress import make_emit
 
 
 def _set_seed(seed: int):
@@ -56,14 +57,20 @@ class TrainCfg:
 def run_experiment(
     cfg: ExperimentConfig,
     project_root: Optional[Path] = None,
+    on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
     on_phase: Optional[Callable[[str, Optional[str]], None]] = None,
     show_progress: bool = True,
 ) -> Dict[str, Any]:
     """
     Full LightGCN + Hybrid QGNN training pipeline. Writes artifacts under cfg.save_dir.
 
-    on_phase: optional callback(phase, message) e.g. ("lightgcn_epoch", "3/8").
+    on_progress: optional callback with keys progress_pct, steps[{id,label,status}], phase, detail.
+    on_phase: legacy (phase, detail); called in addition when provided.
     """
+
+    def _legacy(phase: str, detail: Optional[str]) -> None:
+        if on_phase:
+            on_phase(phase, detail)
     _set_seed(cfg.seed)
     root = project_root or Path.cwd()
     data_path = root / cfg.data_dir
@@ -80,8 +87,19 @@ def run_experiment(
     save_dir.mkdir(parents=True, exist_ok=True)
     scaler = torch.amp.GradScaler("cuda", enabled=(device.type == "cuda"))
 
-    if on_phase:
-        on_phase("data", None)
+    emit = make_emit(cfg.epochs_lg, cfg.epochs_hyb, on_progress)
+    emit(
+        0,
+        "Prepare",
+        "Loading dataset & building graph",
+        prepare="running",
+        lightgcn="pending",
+        hybrid_warmup="pending",
+        hybrid_train="pending",
+        analysis="pending",
+    )
+    _legacy("data", None)
+
     (u_tr, i_tr), (u_te, i_te), n_users, n_items = load_amazon_book_dir(str(data_path))
     (Xtr, ytr), (Xva, yva) = make_small_implicit_split(
         u_tr,
@@ -118,16 +136,24 @@ def run_experiment(
         p_quantum_end=cfg.p_quantum_end,
     )
 
-    # LightGCN
-    if on_phase:
-        on_phase("lightgcn", None)
+    _legacy("lightgcn", None)
+
     lg = LightGCNLite(n_users, n_items, d=cfg.d, K=cfg.K, A_norm=A_norm).to(device)
     opt_lg = torch.optim.Adam(lg.parameters(), lr=tcfg.lr, weight_decay=tcfg.wd)
     best_lg = {"auc": -1.0, "ep": 0}
 
     for ep in range(1, tcfg.epochs_lg + 1):
-        if on_phase:
-            on_phase("lightgcn_epoch", f"{ep}/{tcfg.epochs_lg}")
+        emit(
+            1 + (ep - 1),
+            "LightGCN",
+            f"Epoch {ep}/{tcfg.epochs_lg}",
+            prepare="done",
+            lightgcn="running",
+            hybrid_warmup="pending",
+            hybrid_train="pending",
+            analysis="pending",
+        )
+        _legacy("lightgcn_epoch", f"{ep}/{tcfg.epochs_lg}")
         train_epoch(
             lg,
             train_loader,
@@ -155,9 +181,19 @@ def run_experiment(
             best_lg.update({"auc": m["AUC"], "ep": ep})
             save_best(save_dir / "lg_best.pt", lg, opt_lg, "val_auc", m["AUC"], {"epoch": ep})
 
-    # Hybrid
-    if on_phase:
-        on_phase("hybrid", None)
+        emit(
+            1 + ep,
+            "LightGCN",
+            f"Epoch {ep}/{tcfg.epochs_lg} · val AUC {m['AUC']:.4f}",
+            prepare="done",
+            lightgcn="running" if ep < tcfg.epochs_lg else "done",
+            hybrid_warmup="pending" if ep < tcfg.epochs_lg else "running",
+            hybrid_train="pending",
+            analysis="pending",
+        )
+
+    _legacy("hybrid", None)
+
     hyb = HybridQGNN(
         n_users,
         n_items,
@@ -169,7 +205,9 @@ def run_experiment(
         p_quantum=tcfg.p_quantum_start,
         dev_name=cfg.backend,
     ).to(device)
-    opt_hyb = torch.optim.Adam(hyb.parameters(), lr=tcfg.lr * 0.7, weight_decay=tcfg.wd)
+    opt_hyb = torch.optim.Adam(
+        hyb.parameters(), lr=tcfg.lr * cfg.hybrid_lr_mult, weight_decay=tcfg.wd
+    )
     best_hyb = {"auc": -1.0, "ep": 0}
 
     for p in hyb.encoder.parameters():
@@ -199,9 +237,19 @@ def run_experiment(
     for p in hyb.encoder.parameters():
         p.requires_grad = True
 
+    emit(
+        2 + tcfg.epochs_lg,
+        "Hybrid QGNN",
+        f"Epoch 1/{tcfg.epochs_hyb}",
+        prepare="done",
+        lightgcn="done",
+        hybrid_warmup="done",
+        hybrid_train="running",
+        analysis="pending",
+    )
+
     for ep in range(1, tcfg.epochs_hyb + 1):
-        if on_phase:
-            on_phase("hybrid_epoch", f"{ep}/{tcfg.epochs_hyb}")
+        _legacy("hybrid_epoch", f"{ep}/{tcfg.epochs_hyb}")
         cur_p = tcfg.p_quantum_start + (tcfg.p_quantum_end - tcfg.p_quantum_start) * (ep - 1) / max(
             1, tcfg.epochs_hyb - 1
         )
@@ -247,6 +295,17 @@ def run_experiment(
                 {"epoch": ep, "p_quantum": cur_p},
             )
 
+        emit(
+            2 + tcfg.epochs_lg + ep,
+            "Hybrid QGNN",
+            f"Epoch {ep}/{tcfg.epochs_hyb} · val AUC {m['AUC']:.4f} · p_q {cur_p:.2f}",
+            prepare="done",
+            lightgcn="done",
+            hybrid_warmup="done",
+            hybrid_train="running" if ep < tcfg.epochs_hyb else "done",
+            analysis="pending" if ep < tcfg.epochs_hyb else "running",
+        )
+
     logger.save_csv("metrics.csv")
     logger.save_json("metrics.json")
     summary_text = (
@@ -255,14 +314,33 @@ def run_experiment(
     )
     (save_dir / "summary.txt").write_text(summary_text)
 
-    if on_phase:
-        on_phase("analysis", None)
+    emit(
+        2 + tcfg.epochs_lg + tcfg.epochs_hyb,
+        "Analysis",
+        "Writing comparative tables",
+        prepare="done",
+        lightgcn="done",
+        hybrid_warmup="done",
+        hybrid_train="done",
+        analysis="running",
+    )
+    _legacy("analysis", None)
     from hybrid_qgnn.analysis.comparative import write_comparative_tables
 
     write_comparative_tables(save_dir)
 
-    if on_phase:
-        on_phase("done", None)
+    total_u = 1 + tcfg.epochs_lg + 1 + tcfg.epochs_hyb + 1
+    emit(
+        total_u,
+        "Complete",
+        "All steps finished",
+        prepare="done",
+        lightgcn="done",
+        hybrid_warmup="done",
+        hybrid_train="done",
+        analysis="done",
+    )
+    _legacy("done", None)
 
     return {
         "save_dir": str(save_dir),

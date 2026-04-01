@@ -1,5 +1,6 @@
 import { useDashboard } from "./hooks/useDashboard";
-import { IconAlert, IconFlask, IconServer, IconTable } from "./components/Icons";
+import { ExperimentPanel } from "./components/ExperimentPanel";
+import { IconAlert, IconServer, IconTable } from "./components/Icons";
 
 function StatusBadge({ label, variant }: { label: string; variant: "ok" | "bad" | "pending" }) {
   return (
@@ -8,13 +9,6 @@ function StatusBadge({ label, variant }: { label: string; variant: "ok" | "bad" 
       {label}
     </span>
   );
-}
-
-function jobStatusClass(status: string) {
-  if (status === "completed") return "job-status--completed";
-  if (status === "failed") return "job-status--failed";
-  if (status === "running") return "job-status--running";
-  return "job-status--queued";
 }
 
 export function App() {
@@ -29,8 +23,9 @@ export function App() {
     err,
     starting,
     datasetReady,
+    presets,
     refresh,
-    onStart,
+    runExperiment,
     onSelectRun,
   } = useDashboard();
 
@@ -90,60 +85,15 @@ export function App() {
               </button>
             </div>
           </section>
-
-          <section className="card" aria-labelledby="card-run-heading">
-            <div className="card__head">
-              <h2 id="card-run-heading" className="card__title">
-                Launch experiment
-              </h2>
-              <div className="card__icon card__icon--violet" aria-hidden>
-                <IconFlask />
-              </div>
-            </div>
-            <div className="card__body">
-              <p style={{ margin: "0 0 0.25rem" }}>
-                <strong>Quick demo</strong> — small subset, few epochs, sanity check in minutes.
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong>Full preset</strong> — mirrors packaged <span className="code-inline">ExperimentConfig</span>{" "}
-                (longer wall time).
-              </p>
-            </div>
-            <div className="btn-row">
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={starting || !datasetReady}
-                onClick={() => void onStart(true)}
-              >
-                {starting ? "Starting…" : "Run quick demo"}
-              </button>
-              <button
-                type="button"
-                className="btn btn--secondary"
-                disabled={starting || !datasetReady}
-                onClick={() => void onStart(false)}
-              >
-                Run full preset
-              </button>
-            </div>
-            {activeJob && (
-              <div className="job-panel" role="status" aria-live="polite">
-                <div className="job-panel__header">
-                  <span className={`job-status ${jobStatusClass(activeJob.status)}`}>{activeJob.status}</span>
-                  <span className="job-phase">
-                    {activeJob.phase}
-                    {activeJob.detail ? ` · ${activeJob.detail}` : ""}
-                  </span>
-                </div>
-                {activeJob.error && <p className="job-error">{activeJob.error}</p>}
-                {activeJob.result && (
-                  <pre className="job-pre">{JSON.stringify(activeJob.result, null, 2)}</pre>
-                )}
-              </div>
-            )}
-          </section>
         </div>
+
+        <ExperimentPanel
+          presets={presets}
+          datasetReady={datasetReady}
+          starting={starting}
+          activeJob={activeJob}
+          onRun={(body) => void runExperiment(body)}
+        />
 
         {err && (
           <div className="alert" role="alert">
@@ -172,6 +122,7 @@ export function App() {
                     <tr>
                       <th scope="col">Job ID</th>
                       <th scope="col">Status</th>
+                      <th scope="col">Progress</th>
                       <th scope="col">Phase</th>
                       <th scope="col">Updated</th>
                     </tr>
@@ -185,6 +136,7 @@ export function App() {
                             {j.status}
                           </span>
                         </td>
+                        <td className="mono">{typeof j.progress_pct === "number" ? `${j.progress_pct.toFixed(0)}%` : "—"}</td>
                         <td className="mono">
                           {j.phase}
                           {j.detail ? ` · ${j.detail}` : ""}

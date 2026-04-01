@@ -694,3 +694,187 @@
 .app-footer a:hover {
   text-decoration: underline;
 }
+
+/* Experiment runner */
+.preset-switch {
+  display: inline-flex;
+  gap: 0;
+  margin: 1rem 0 1.25rem;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--void);
+  border: 1px solid var(--border);
+}
+
+.preset-switch__btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  border-radius: calc(var(--radius-md) - 3px);
+  transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
+}
+
+.preset-switch__btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.preset-switch__btn:disabled {
+  opacity: 0.4;
+}
+
+.preset-switch__btn--active {
+  background: rgba(232, 168, 56, 0.15);
+  color: var(--amber);
+  box-shadow: inset 0 0 0 1px rgba(232, 168, 56, 0.25);
+}
+
+.exp-form {
+  margin-bottom: 0.5rem;
+}
+
+.exp-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 0.65rem 1rem;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  padding: 0.25rem 0.15rem 0.5rem;
+  margin: 0 -0.15rem;
+}
+
+.exp-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.exp-form__key {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.exp-form__input {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+  background: var(--void);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease;
+}
+
+.exp-form__input:focus {
+  outline: none;
+  border-color: rgba(232, 168, 56, 0.45);
+}
+
+/* Progress */
+.progress-block {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.progress-block__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.45rem;
+}
+
+.progress-block__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.progress-block__pct {
+  font-size: 0.8rem;
+  color: var(--amber);
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--amber-dim), var(--amber), #f5d08a);
+  box-shadow: 0 0 20px var(--amber-glow);
+  transition: width 0.35s var(--ease-out);
+}
+
+.step-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.step-list__item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.step-list__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.step-list__item--pending .step-list__dot {
+  opacity: 0.35;
+}
+
+.step-list__item--running .step-list__dot {
+  background: var(--amber);
+  box-shadow: 0 0 10px var(--amber-glow);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+.step-list__item--done .step-list__dot {
+  background: var(--mint);
+}
+
+.step-list__item--error .step-list__dot {
+  background: var(--rose);
+}
+
+.step-list__label {
+  min-width: 0;
+}
+
+.step-list__state {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.step-list__item--running .step-list__state {
+  color: var(--amber);
+}
+
+.step-list__item--done .step-list__state {
+  color: var(--mint);
+}

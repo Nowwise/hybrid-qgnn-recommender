@@ -7,11 +7,19 @@ export type DatasetStatus = {
   test_txt: boolean;
 };
 
+export type JobStep = {
+  id: string;
+  label: string;
+  status: "pending" | "running" | "done" | "error";
+};
+
 export type JobPublic = {
   id: string;
   status: "queued" | "running" | "completed" | "failed";
   phase: string;
   detail: string | null;
+  progress_pct: number;
+  steps: JobStep[];
   created_at: string;
   updated_at: string;
   error: string | null;
@@ -25,6 +33,11 @@ export type RunSummary = {
   has_summary: boolean;
   best_lightgcn_auc: number | null;
   best_hybrid_auc: number | null;
+};
+
+export type ExperimentPresets = {
+  quick: Record<string, unknown>;
+  full: Record<string, unknown>;
 };
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -47,10 +60,15 @@ export function getDatasetStatus() {
   return fetchJson<DatasetStatus>("/datasets/status");
 }
 
-export function startRun(quickDemo: boolean) {
+export function getExperimentPresets() {
+  return fetchJson<ExperimentPresets>("/experiments/presets");
+}
+
+/** Start a run: pass preset + any config fields (snake_case) to merge on the server. */
+export function startExperiment(body: Record<string, unknown>) {
   return fetchJson<JobPublic>("/experiments/runs", {
     method: "POST",
-    body: JSON.stringify({ quick_demo: quickDemo }),
+    body: JSON.stringify(body),
   });
 }
 

@@ -30,6 +30,7 @@ class ExperimentConfig:
     lr: float = 1.5e-3
     wd: float = 1e-6
     eval_every: int = 1
+    hybrid_lr_mult: float = 0.7
 
     p_quantum_start: float = 0.4
     p_quantum_end: float = 1.0
