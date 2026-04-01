@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.Python
+*.so
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+runs/
+*.pt
+.DS_Store
+node_modules/
+frontend/dist/
+*.tsbuildinfo
