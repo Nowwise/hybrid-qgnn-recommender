@@ -28,8 +28,13 @@ class _SparseDenseMM(torch.autograd.Function):
         return None, grad_x.to(dtype=x.dtype, device=x.device)
 
 
-def _sparse_mm_fp32_safe(A: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+def sparse_mm_fp32_safe(A: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Sparse @ dense matmul in float32 (safe under AMP). Public for graph encoder variants."""
     return _SparseDenseMM.apply(A, x)
+
+
+# Backward-compatible alias
+_sparse_mm_fp32_safe = sparse_mm_fp32_safe
 
 
 class LightGCNLite(nn.Module):
@@ -57,7 +62,7 @@ class LightGCNLite(nn.Module):
         amp_off = torch.amp.autocast("cuda", enabled=False) if w.is_cuda else nullcontext()
         with amp_off:
             for _ in range(self.K):
-                x = _sparse_mm_fp32_safe(A, x)
+                x = sparse_mm_fp32_safe(A, x)
                 embs.append(x)
             out = torch.stack(embs).mean(dim=0)
         return out

@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY src ./src
 COPY backend ./backend
+COPY scripts ./scripts
 
 ENV QGNN_PROJECT_ROOT=/app
 ENV PYTHONUNBUFFERED=1

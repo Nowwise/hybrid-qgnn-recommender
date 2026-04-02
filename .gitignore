@@ -1,3 +1,9 @@
+# Notebooks (local runs / outputs)
+*.ipynb
+
+# IDE / local tooling (not part of the thesis artifact)
+.cursor/
+
 __pycache__/
 *.py[cod]
 .Python
@@ -17,3 +23,5 @@ frontend/dist/
 # Local thesis / coursework context (do not publish)
 thesis_coursework_full_context.md
 **/thesis_coursework_full_context.md
+cursor_brief_hse_thesis_recommendations.md
+**/cursor_brief_hse_thesis_recommendations.md

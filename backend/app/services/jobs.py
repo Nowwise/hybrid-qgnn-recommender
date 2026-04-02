@@ -31,6 +31,15 @@ def list_jobs() -> list[JobPublic]:
         return sorted(_jobs.values(), key=lambda j: j.created_at, reverse=True)
 
 
+def clear_all_job_records() -> int:
+    """Drop every job from memory. Only call when no queued/running jobs exist."""
+    with _lock:
+        n = len(_jobs)
+        _jobs.clear()
+        _cancel_events.clear()
+        return n
+
+
 def cancel_job(job_id: str) -> bool:
     with _lock:
         ev = _cancel_events.get(job_id)
@@ -108,6 +117,9 @@ def submit_training(
                     j.events = [*j.events, ev]
                     if len(j.events) > _MAX_EVENTS:
                         j.events = j.events[-_MAX_EVENTS:]
+            sd_raw = update.get("save_dir")
+            if isinstance(sd_raw, str) and sd_raw.strip():
+                j.save_dir = sd_raw.strip().replace("\\", "/")
             j.updated_at = _utcnow()
 
     def _run():

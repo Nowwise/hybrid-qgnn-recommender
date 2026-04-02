@@ -37,6 +37,8 @@ Set `data_dir` to `dataset/movielens-100k` in the dashboard or API to train on t
 
 **Docker:** `docker-compose` mounts `./dataset` → `/app/dataset` so the API sees the same paths.
 
+**Notebooks:** step-through lab in **`Lab Work/Main_lab.ipynb`** (same `ExperimentConfig` / `run_experiment` as the API). `*.ipynb` is gitignored — keep your copy locally.
+
 ---
 
 ## GPU acceleration (NVIDIA)

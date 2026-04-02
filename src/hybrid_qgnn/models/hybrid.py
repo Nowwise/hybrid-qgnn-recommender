@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
-from hybrid_qgnn.models.lightgcn import LightGCNLite
+from hybrid_qgnn.models.graph_encoders import create_graph_encoder
 from hybrid_qgnn.models.quantum import QuantumBlock
 
 
@@ -15,14 +17,22 @@ class HybridQGNN(nn.Module):
         d=32,
         K=1,
         A_norm=None,
+        encoder: Optional[nn.Module] = None,
+        backbone: str = "lightgcn",
         q=3,
         L=1,
         p_quantum=1.0,
         dev_name="lightning.qubit",
+        quantum_entangle: bool = True,
     ):
         super().__init__()
-        self.encoder = LightGCNLite(n_users, n_items, d=d, K=K, A_norm=A_norm)
-        self.quantum = QuantumBlock(q=q, L=L, in_dim=2 * d, dev_name=dev_name)
+        if encoder is not None:
+            self.encoder = encoder
+        else:
+            self.encoder = create_graph_encoder(backbone, n_users, n_items, d, K, A_norm)
+        self.quantum = QuantumBlock(
+            q=q, L=L, in_dim=2 * d, dev_name=dev_name, entangle=quantum_entangle
+        )
         self.head = nn.Sequential(nn.Linear(q, 64), nn.ReLU(), nn.Linear(64, 1))
         self.fallback = nn.Linear(2 * d, q)
         self.p_quantum = float(p_quantum)

@@ -3,9 +3,9 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class JobStatus(str, Enum):
@@ -21,7 +21,8 @@ class ExperimentStartBody(BaseModel):
 
     preset: Optional[str] = Field(
         default=None,
-        description='Base: "lightweight" | "notebook" | "custom" (aliases: quick, full). Ignored if quick_demo is true.',
+        description='Base: "lightweight" | "notebook" | "large" | "extra_large" | "custom" '
+        '(aliases: quick, full; extra_large: xl, xlarge, extra-large). Ignored if quick_demo is true.',
     )
     quick_demo: bool = Field(
         default=False,
@@ -110,6 +111,47 @@ class ExperimentStartBody(BaseModel):
     eval_hybrid_ablation: Optional[bool] = None
     log_phase_timings: Optional[bool] = None
 
+    training_loss: Optional[Literal["bce", "bpr"]] = Field(
+        default=None,
+        description='Pointwise BCE on labeled pairs vs BPR triplets (LightGCN-style ranking loss).',
+    )
+    early_stopping: Optional[bool] = None
+    early_stopping_patience: Optional[int] = Field(default=None, ge=1)
+    early_stopping_min_delta: Optional[float] = Field(default=None, ge=0.0)
+    early_stopping_monitor: Optional[Literal["val_auc", "val_training_loss"]] = None
+    quantum_entangle: Optional[bool] = Field(
+        default=None,
+        description="If false, variational layers omit ring CNOT entanglement (ablation).",
+    )
+
+    seeds: Optional[List[int]] = Field(
+        default=None,
+        description="If set (e.g. thesis variance), runs one sub-experiment per seed. Merged with sweep grid.",
+    )
+    sweep_q: Optional[List[int]] = Field(default=None, description="Qubit counts for Cartesian ablation (e.g. [4,8,12]).")
+    sweep_L: Optional[List[int]] = Field(
+        default=None, description="Variational layer depths for Cartesian ablation (e.g. [1,3])."
+    )
+    sweep_entangle: Optional[List[bool]] = Field(
+        default=None,
+        description="Entanglement flags for ablation; e.g. [true, false] for with/without ring CNOT.",
+    )
+    live_plots: Optional[bool] = Field(
+        default=None,
+        description="If false, skip per-epoch matplotlib dashboard under runs/…/plots/.",
+    )
+
+    # Graph baselines (sequential classical encoders before hybrid). Hybrid always trains the backbone id.
+    train_baseline_lightgcn: Optional[bool] = None
+    train_baseline_ultragcn: Optional[bool] = None
+    train_baseline_sgl: Optional[bool] = None
+    train_baseline_ncl: Optional[bool] = None
+    train_baseline_xsimgcl: Optional[bool] = None
+    hybrid_backbone: Optional[str] = Field(
+        default=None,
+        description='Which baseline encoder initializes HybridQGNN: "lightgcn" | "ultragcn" | "sgl" | "ncl" | "xsimgcl".',
+    )
+
 
 class JobStepStatus(str, Enum):
     pending = "pending"
@@ -148,6 +190,8 @@ class JobPublic(BaseModel):
     status: JobStatus
     phase: str = ""
     detail: Optional[str] = None
+    # Project-relative output folder (posix path); set once the run creates save_dir.
+    save_dir: Optional[str] = None
     progress_pct: float = 0.0
     steps: List[JobStep] = Field(default_factory=list)
     activity: Optional[JobActivity] = None
@@ -166,6 +210,54 @@ class RunSummary(BaseModel):
     experiment_name: Optional[str] = None
     best_lightgcn_auc: Optional[float] = None
     best_hybrid_auc: Optional[float] = None
+    # From run_config.json + artifact scan (for Saved models gallery)
+    data_dir: Optional[str] = None
+    hybrid_backbone: Optional[str] = None
+    q: Optional[int] = None
+    L: Optional[int] = None
+    d: Optional[int] = None
+    K: Optional[int] = None
+    epochs_lg: Optional[int] = None
+    epochs_hyb: Optional[int] = None
+    has_hybrid_checkpoint: bool = False
+    n_baseline_checkpoints: int = 0
+    modified_at: Optional[datetime] = None
+    has_graph_context: bool = False
+
+
+class ScorePairsBody(BaseModel):
+    """Score (user, item) pairs with a saved hybrid checkpoint — no training."""
+
+    pairs_text: Optional[str] = Field(
+        default=None,
+        description='Optional: newline-separated lines "user item" using 0-based IDs (same as train.txt).',
+    )
+    pairs: Optional[List[Tuple[int, int]]] = Field(
+        default=None,
+        description="Optional: explicit list of [user, item] pairs (0-based).",
+    )
+    micro_bs: int = Field(default=256, ge=1, le=2048)
+
+    @model_validator(mode="after")
+    def _one_pair_source(self) -> "ScorePairsBody":
+        has_text = self.pairs_text is not None and str(self.pairs_text).strip() != ""
+        has_pairs = self.pairs is not None and len(self.pairs) > 0
+        if has_text and has_pairs:
+            raise ValueError("Provide only one of pairs_text or pairs")
+        if not has_text and not has_pairs:
+            raise ValueError("Provide pairs_text or pairs")
+        return self
+
+
+class ScorePairsResponse(BaseModel):
+    scores: List[float]
+    pairs: List[Tuple[int, int]]
+    n_pairs: int
+    run_id: str
+    n_users: int
+    n_items: int
+    hybrid_backbone: str
+    graph_context: str
 
 
 class DatasetStatus(BaseModel):

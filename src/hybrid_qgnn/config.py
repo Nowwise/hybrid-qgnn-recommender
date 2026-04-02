@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+import json
+from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional
 
 
 @dataclass
@@ -25,6 +27,7 @@ class ExperimentConfig:
     # Hybrid quantum head
     q: int = 4
     L: int = 2
+    quantum_entangle: bool = True
 
     backend: str = "lightning.qubit"
     micro_bs: int = 48
@@ -47,6 +50,15 @@ class ExperimentConfig:
 
     seed: int = 42
 
+    # Training objective: "bce" = pointwise BCE on labeled pairs; "bpr" = Bayesian Personalized Ranking triplets.
+    training_loss: Literal["bce", "bpr"] = "bce"
+    # Stop an epoch phase early when the monitored validation signal stops improving.
+    early_stopping: bool = False
+    early_stopping_patience: int = 3
+    early_stopping_min_delta: float = 1e-4
+    # val_auc = ROC-AUC on validation pairs; val_training_loss = BCE or BPR loss on validation (matches training_loss).
+    early_stopping_monitor: Literal["val_auc", "val_training_loss"] = "val_auc"
+
     # Training compute: None → env QGNN_DEVICE or "auto". Use "cpu", "cuda", "cuda:0", "auto".
     device: Optional[str] = None
 
@@ -62,8 +74,32 @@ class ExperimentConfig:
     eval_hybrid_ablation: bool = True
     log_phase_timings: bool = True
 
+    # Write metrics.csv + plots/training_dashboard.png after each epoch (for dashboard live view).
+    live_plots: bool = True
+
+    # Graph baselines (trained sequentially; each uses epochs_lg and lightgcn_lr). Hybrid encoder is chosen separately.
+    train_baseline_lightgcn: bool = True
+    train_baseline_ultragcn: bool = True
+    train_baseline_sgl: bool = True
+    train_baseline_ncl: bool = True
+    train_baseline_xsimgcl: bool = True
+    # Which baseline’s trained weights initialize HybridQGNN.encoder (must be one of the graph encoder ids).
+    hybrid_backbone: str = "lightgcn"
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_json_path(cls, path: Path | str) -> "ExperimentConfig":
+        """Load from JSON object on disk; unknown keys raise. Merges onto defaults (same as CLI scripts)."""
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("config JSON must be an object")
+        allowed = {f.name for f in fields(cls)}
+        unknown = set(raw) - allowed
+        if unknown:
+            raise ValueError(f"unknown ExperimentConfig keys: {sorted(unknown)}")
+        return cls(**{**asdict(cls()), **raw})
 
     def resolved_lightgcn_lr(self) -> float:
         return self.lightgcn_lr if self.lightgcn_lr is not None else self.lr
@@ -72,6 +108,15 @@ class ExperimentConfig:
         if self.hybrid_lr is not None:
             return self.hybrid_lr
         return self.lr * self.hybrid_lr_mult
+
+    def ordered_enabled_baselines(self) -> List[str]:
+        """Baselines to train this run, in fixed order. Always includes ``hybrid_backbone``."""
+        from hybrid_qgnn.models.graph_encoders import BASELINE_MODEL_IDS
+
+        selected = {bid for bid in BASELINE_MODEL_IDS if getattr(self, f"train_baseline_{bid}", False)}
+        bb = self.hybrid_backbone.strip().lower()
+        selected.add(bb)
+        return [b for b in BASELINE_MODEL_IDS if b in selected]
 
     @classmethod
     def lightweight(cls) -> "ExperimentConfig":
@@ -126,6 +171,72 @@ class ExperimentConfig:
             p_quantum_start=0.4,
             p_quantum_end=1.0,
             seed=42,
+        )
+
+    @classmethod
+    def large(cls) -> "ExperimentConfig":
+        """Heavier thesis run: more users, wider embeddings, deeper GCN and quantum stack."""
+        return cls(
+            save_dir="./runs/large",
+            max_users=16000,
+            max_pos_per_user=15,
+            neg_per_pos=1,
+            val_ratio=0.10,
+            d=128,
+            K=3,
+            q=5,
+            L=3,
+            backend="lightning.qubit",
+            micro_bs=32,
+            epochs_lg=12,
+            epochs_hyb=8,
+            batch_size=1280,
+            lr=1e-3,
+            lightgcn_lr=None,
+            hybrid_lr=None,
+            hybrid_lr_mult=0.7,
+            wd=1e-6,
+            eval_every=1,
+            p_quantum_start=0.4,
+            p_quantum_end=1.0,
+            seed=42,
+            ranking_max_users=768,
+            ranking_negatives=99,
+        )
+
+    @classmethod
+    def extra_large(cls) -> "ExperimentConfig":
+        """Long, high-coverage run; enable early stopping and less frequent validation by default."""
+        return cls(
+            save_dir="./runs/extra_large",
+            max_users=30000,
+            max_pos_per_user=25,
+            neg_per_pos=1,
+            val_ratio=0.10,
+            d=128,
+            K=3,
+            q=6,
+            L=3,
+            backend="lightning.qubit",
+            micro_bs=20,
+            epochs_lg=24,
+            epochs_hyb=12,
+            batch_size=768,
+            lr=1e-3,
+            lightgcn_lr=None,
+            hybrid_lr=None,
+            hybrid_lr_mult=0.7,
+            wd=1e-6,
+            eval_every=2,
+            p_quantum_start=0.4,
+            p_quantum_end=1.0,
+            seed=42,
+            early_stopping=True,
+            early_stopping_patience=3,
+            early_stopping_min_delta=1e-4,
+            early_stopping_monitor="val_auc",
+            ranking_max_users=512,
+            ranking_negatives=99,
         )
 
     @classmethod

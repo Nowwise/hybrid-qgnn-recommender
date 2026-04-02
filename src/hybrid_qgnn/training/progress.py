@@ -8,22 +8,32 @@ from typing import Any, Callable, Dict, List, Literal, Optional
 StepStatus = Literal["pending", "running", "done", "error"]
 
 
-def build_step_list(
+def build_multibaseline_steps(
     prepare: StepStatus,
-    lightgcn: StepStatus,
+    baseline_ids: List[str],
+    baseline_statuses: List[StepStatus],
     hybrid_warmup: StepStatus,
     hybrid_train: StepStatus,
     analysis: StepStatus,
     epochs_lg: int,
     epochs_hyb: int,
 ) -> List[Dict[str, str]]:
-    return [
-        {"id": "prepare", "label": "Data & graph", "status": prepare},
-        {"id": "lightgcn", "label": f"LightGCN ({epochs_lg} ep)", "status": lightgcn},
-        {"id": "hybrid_warmup", "label": "Hybrid QGNN warmup", "status": hybrid_warmup},
-        {"id": "hybrid_train", "label": f"Hybrid QGNN ({epochs_hyb} ep)", "status": hybrid_train},
-        {"id": "analysis", "label": "Metrics & tables", "status": analysis},
-    ]
+    from hybrid_qgnn.models.graph_encoders import BASELINE_DISPLAY_NAMES
+
+    if len(baseline_statuses) != len(baseline_ids):
+        raise ValueError("baseline_statuses must align with baseline_ids")
+    out: List[Dict[str, str]] = [{"id": "prepare", "label": "Data & graph", "status": prepare}]
+    for bid, st in zip(baseline_ids, baseline_statuses):
+        dn = BASELINE_DISPLAY_NAMES.get(bid, bid)
+        out.append({"id": f"baseline_{bid}", "label": f"{dn} ({epochs_lg} ep)", "status": st})
+    out.extend(
+        [
+            {"id": "hybrid_warmup", "label": "Hybrid QGNN warmup", "status": hybrid_warmup},
+            {"id": "hybrid_train", "label": f"Hybrid QGNN ({epochs_hyb} ep)", "status": hybrid_train},
+            {"id": "analysis", "label": "Metrics & tables", "status": analysis},
+        ]
+    )
+    return out
 
 
 def progress_payload(
@@ -82,23 +92,42 @@ def segment_train_val_position(
 
 class PipelineReporter:
     """
-    Float pipeline position in [0, M] where M = 1 + epochs_lg + 1 + epochs_hyb + 1
-    (prepare, each LightGCN epoch, hybrid warmup, each hybrid epoch, analysis).
+    Pipeline position in [0, M] with M = 1 + n_baselines * epochs_lg + 1 + epochs_hyb + 1.
+    Baseline step list is built from ``baseline_ids`` (e.g. lightgcn, sgl, …).
     """
 
     def __init__(
         self,
+        baseline_ids: List[str],
         epochs_lg: int,
         epochs_hyb: int,
         on_progress: Optional[Callable[[Dict[str, Any]], None]],
     ) -> None:
+        self.baseline_ids = list(baseline_ids)
         self.epochs_lg = epochs_lg
         self.epochs_hyb = epochs_hyb
-        self.M = float(1 + epochs_lg + 1 + epochs_hyb + 1)
+        self.M = float(1 + len(self.baseline_ids) * epochs_lg + 1 + epochs_hyb + 1)
         self.on_progress = on_progress
+        self._bs: List[StepStatus] = ["pending"] * len(self.baseline_ids)
 
     def _iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    def set_baseline_active(self, index: int) -> None:
+        for j in range(len(self._bs)):
+            if j < index:
+                self._bs[j] = "done"
+            elif j == index:
+                self._bs[j] = "running"
+            else:
+                self._bs[j] = "pending"
+
+    def mark_baseline_done(self, index: int) -> None:
+        if 0 <= index < len(self._bs):
+            self._bs[index] = "done"
+
+    def all_baselines_finished(self) -> None:
+        self._bs = ["done"] * len(self.baseline_ids)
 
     def push(
         self,
@@ -107,7 +136,6 @@ class PipelineReporter:
         detail: Optional[str] = None,
         *,
         prepare: StepStatus = "pending",
-        lightgcn: StepStatus = "pending",
         hybrid_warmup: StepStatus = "pending",
         hybrid_train: StepStatus = "pending",
         analysis: StepStatus = "pending",
@@ -117,8 +145,15 @@ class PipelineReporter:
     ) -> None:
         if not self.on_progress:
             return
-        steps = build_step_list(
-            prepare, lightgcn, hybrid_warmup, hybrid_train, analysis, self.epochs_lg, self.epochs_hyb
+        steps = build_multibaseline_steps(
+            prepare,
+            self.baseline_ids,
+            list(self._bs),
+            hybrid_warmup,
+            hybrid_train,
+            analysis,
+            self.epochs_lg,
+            self.epochs_hyb,
         )
         ev: Optional[Dict[str, Any]] = None
         if event_message:
@@ -147,18 +182,17 @@ class PipelineReporter:
             out["event"] = {"ts": self._iso(), "kind": "info", "message": event_message}
         self.on_progress(out)
 
-    # Segment bases (start of each segment when that segment begins)
     def base_prepare(self) -> float:
         return 0.0
 
-    def base_lightgcn_epoch(self, ep_1based: int) -> float:
-        return float(1 + (ep_1based - 1))
+    def base_baseline_epoch(self, baseline_index: int, ep_1based: int) -> float:
+        return float(1 + baseline_index * self.epochs_lg + (ep_1based - 1))
 
     def base_hybrid_warmup(self) -> float:
-        return float(1 + self.epochs_lg)
+        return float(1 + len(self.baseline_ids) * self.epochs_lg)
 
     def base_hybrid_epoch(self, ep_1based: int) -> float:
-        return float(1 + self.epochs_lg + 1 + (ep_1based - 1))
+        return float(1 + len(self.baseline_ids) * self.epochs_lg + 1 + (ep_1based - 1))
 
     def base_analysis(self) -> float:
-        return float(1 + self.epochs_lg + 1 + self.epochs_hyb)
+        return float(1 + len(self.baseline_ids) * self.epochs_lg + 1 + self.epochs_hyb)

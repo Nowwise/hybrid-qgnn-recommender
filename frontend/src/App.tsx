@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useDashboard } from "./hooks/useDashboard";
-import { ExperimentPanel } from "./components/ExperimentPanel";
+import { ExperimentPanel, type CloneRequestPayload } from "./components/ExperimentPanel";
+import { SavedModelsPage } from "./components/SavedModelsPage";
+import { ScorePairsPage } from "./components/ScorePairsPage";
 import { IconAlert, IconServer, IconTable } from "./components/Icons";
 
 function StatusBadge({ label, variant }: { label: string; variant: "ok" | "bad" | "pending" }) {
@@ -12,7 +14,13 @@ function StatusBadge({ label, variant }: { label: string; variant: "ok" | "bad" 
   );
 }
 
+type AppView = "lab" | "saved_models" | "score_pairs";
+
 export function App() {
+  const [view, setView] = useState<AppView>("lab");
+  const [cloneRequest, setCloneRequest] = useState<CloneRequestPayload | null>(null);
+  const onCloneConsumed = useCallback(() => setCloneRequest(null), []);
+
   const {
     apiOk,
     datasets,
@@ -30,6 +38,12 @@ export function App() {
     runExperiment,
     cancelRun,
     onSelectRun,
+    openJob,
+    dismissActiveJob,
+    wipeHistory,
+    clearingHistory,
+    removeHistoryRun,
+    deletingRunId,
   } = useDashboard();
 
   const selectedRunMeta = useMemo(() => {
@@ -44,6 +58,11 @@ export function App() {
 
   const apiVariant = apiOk === null ? "pending" : apiOk ? "ok" : "bad";
   const apiLabel = apiOk === null ? "Checking API" : apiOk ? "API online" : "API offline";
+
+  const handleCloneFromSaved = useCallback((cfg: Record<string, unknown>) => {
+    setCloneRequest({ nonce: Date.now(), config: cfg });
+    setView("lab");
+  }, []);
 
   return (
     <div className="app">
@@ -63,8 +82,46 @@ export function App() {
             Compare LightGCN against the hybrid quantum–classical recommender on Amazon-Book or MovieLens-100K
             (same on-disk layout), stream validation metrics, and audit every run from one control surface.
           </p>
+          <nav className="app-view-nav" aria-label="Primary pages">
+            <button
+              type="button"
+              className={`app-view-nav__btn${view === "lab" ? " app-view-nav__btn--active" : ""}`}
+              onClick={() => setView("lab")}
+            >
+              Lab
+            </button>
+            <button
+              type="button"
+              className={`app-view-nav__btn${view === "saved_models" ? " app-view-nav__btn--active" : ""}`}
+              onClick={() => setView("saved_models")}
+            >
+              Saved models
+            </button>
+            <button
+              type="button"
+              className={`app-view-nav__btn${view === "score_pairs" ? " app-view-nav__btn--active" : ""}`}
+              onClick={() => setView("score_pairs")}
+            >
+              Score pairs
+            </button>
+          </nav>
         </header>
 
+        {view === "saved_models" ? (
+          <SavedModelsPage
+            history={history}
+            deletingRunId={deletingRunId}
+            onBack={() => setView("lab")}
+            onCloneToLab={handleCloneFromSaved}
+            onDeleteRun={(id) => void removeHistoryRun(id)}
+            onRefresh={() => void refresh()}
+          />
+        ) : null}
+
+        {view === "score_pairs" ? <ScorePairsPage onBack={() => setView("lab")} /> : null}
+
+        {view === "lab" ? (
+          <>
         <div className="grid-cards">
           <section className="card" aria-labelledby="card-status-heading">
             <div className="card__head">
@@ -120,6 +177,9 @@ export function App() {
           activeJob={activeJob}
           onRun={(body) => void runExperiment(body)}
           onCancel={(id) => void cancelRun(id)}
+          onDismissJob={dismissActiveJob}
+          cloneRequest={cloneRequest}
+          onCloneConsumed={onCloneConsumed}
         />
 
         {err && (
@@ -152,6 +212,7 @@ export function App() {
                       <th scope="col">Progress</th>
                       <th scope="col">Phase</th>
                       <th scope="col">Updated</th>
+                      <th scope="col">View</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -169,6 +230,15 @@ export function App() {
                           {j.detail ? ` · ${j.detail}` : ""}
                         </td>
                         <td className="mono">{new Date(j.updated_at).toLocaleString()}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--compact"
+                            onClick={() => void openJob(j.id)}
+                          >
+                            Open
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -181,10 +251,29 @@ export function App() {
         <section className="panel" aria-labelledby="history-heading">
           <div className="panel__bar" aria-hidden />
           <div className="panel__inner">
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-              <h2 id="history-heading" className="panel__title" style={{ margin: 0, flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              <h2 id="history-heading" className="panel__title" style={{ margin: 0, flex: "1 1 12rem" }}>
                 Experiment history
               </h2>
+              {(history.length > 0 || jobs.length > 0) && (
+                <button
+                  type="button"
+                  className="btn btn--danger btn--compact"
+                  disabled={clearingHistory}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        "Delete every run folder under runs/ and remove all jobs from the API queue. This cannot be undone. You must cancel any running or queued job first (the server will refuse otherwise).",
+                      )
+                    ) {
+                      return;
+                    }
+                    void wipeHistory();
+                  }}
+                >
+                  {clearingHistory ? "Clearing…" : "Clear all history"}
+                </button>
+              )}
               <div className="card__icon" style={{ width: 36, height: 36 }} aria-hidden>
                 <IconTable />
               </div>
@@ -205,6 +294,7 @@ export function App() {
                         <th scope="col">LightGCN val AUC</th>
                         <th scope="col">Hybrid val AUC</th>
                         <th scope="col">Metrics</th>
+                        <th scope="col">Delete</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -232,6 +322,27 @@ export function App() {
                             <span className={`yes-no ${h.has_metrics ? "yes-no--yes" : "yes-no--no"}`}>
                               {h.has_metrics ? "Available" : "—"}
                             </span>
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              className="btn btn--danger btn--compact"
+                              disabled={deletingRunId === h.run_id}
+                              aria-label={`Delete run folder ${h.run_id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (
+                                  !window.confirm(
+                                    `Delete the run folder "${h.run_id}" and all files inside? This cannot be undone.`,
+                                  )
+                                ) {
+                                  return;
+                                }
+                                void removeHistoryRun(h.run_id);
+                              }}
+                            >
+                              {deletingRunId === h.run_id ? "…" : "Delete"}
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -320,6 +431,8 @@ export function App() {
             OpenAPI docs
           </a>
         </footer>
+          </>
+        ) : null}
       </div>
     </div>
   );

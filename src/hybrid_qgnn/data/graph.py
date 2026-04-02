@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import torch
@@ -73,6 +73,62 @@ def make_loaders(train, val, batch_size: int = 4096, num_workers: int = 0, devic
     train_loader = torch.utils.data.DataLoader(tr, batch_size=batch_size, shuffle=True, **loader_args)
     val_loader = torch.utils.data.DataLoader(va, batch_size=batch_size, shuffle=False, **loader_args)
     return train_loader, val_loader
+
+
+def _user_positive_sets(train_pos: np.ndarray) -> Dict[int, set]:
+    m: Dict[int, set] = {}
+    for row in train_pos:
+        u, i = int(row[0]), int(row[1])
+        m.setdefault(u, set()).add(i)
+    return m
+
+
+class BPRTripletDataset(torch.utils.data.Dataset):
+    """One positive + one random negative per user (implicit BPR)."""
+
+    def __init__(self, pos_pairs: np.ndarray, n_items: int, seed: int):
+        self.pos = np.ascontiguousarray(pos_pairs, dtype=np.int64)
+        self.n_items = int(n_items)
+        self.user_pos = _user_positive_sets(self.pos)
+        self._rng = np.random.default_rng(int(seed))
+
+    def __len__(self) -> int:
+        return len(self.pos)
+
+    def __getitem__(self, idx: int):
+        u, i_pos = self.pos[idx % len(self.pos)]
+        u_i, i_pos_i = int(u), int(i_pos)
+        seen = self.user_pos[u_i]
+        for _ in range(64):
+            j = int(self._rng.integers(0, self.n_items))
+            if j not in seen:
+                return u_i, i_pos_i, j
+        for j in range(self.n_items):
+            if j not in seen:
+                return u_i, i_pos_i, j
+        return u_i, i_pos_i, (i_pos_i + 1) % self.n_items
+
+
+def make_bpr_loader(
+    pos_pairs: np.ndarray,
+    n_items: int,
+    batch_size: int,
+    num_workers: int,
+    device,
+    seed: int,
+    *,
+    shuffle: bool,
+):
+    ds = BPRTripletDataset(pos_pairs, n_items, seed)
+    pin = device is not None and getattr(device, "type", None) == "cuda"
+    return torch.utils.data.DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin,
+        persistent_workers=False,
+    )
 
 
 def build_norm_adj_from_train_pairs(n_users: int, n_items: int, train_pairs: np.ndarray):

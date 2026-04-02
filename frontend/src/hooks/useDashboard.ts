@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   cancelExperimentJob,
+  clearExperimentHistory,
+  deleteHistoryRun,
   getComparative,
   getDatasetStatus,
   getExperimentPresets,
@@ -27,6 +29,8 @@ export function useDashboard() {
   const [err, setErr] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setErr(null);
@@ -41,7 +45,17 @@ export function useDashboard() {
       setDatasets(ds.datasets);
       setPresets(await getExperimentPresets());
       setHistory(await listHistory());
-      setJobs(await listJobs());
+      const jList = await listJobs();
+      setJobs(jList);
+      setActiveJob((prev) => {
+        if (prev) {
+          const updated = jList.find((j) => j.id === prev.id);
+          if (updated) return updated;
+          return null;
+        }
+        const alive = jList.find((j) => j.status === "running" || j.status === "queued");
+        return alive ?? null;
+      });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     }
@@ -109,6 +123,66 @@ export function useDashboard() {
     }
   };
 
+  const openJob = useCallback(async (jobId: string) => {
+    setErr(null);
+    try {
+      const j = await getJob(jobId);
+      setActiveJob(j);
+      requestAnimationFrame(() => {
+        document.getElementById("exp-sec-live")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not load job");
+    }
+  }, []);
+
+  const dismissActiveJob = useCallback(() => {
+    setActiveJob(null);
+  }, []);
+
+  const wipeHistory = useCallback(async () => {
+    setErr(null);
+    setClearingHistory(true);
+    try {
+      await clearExperimentHistory();
+      setActiveJob(null);
+      setSelectedRun(null);
+      setComparative(null);
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Clear history failed");
+    } finally {
+      setClearingHistory(false);
+    }
+  }, [refresh]);
+
+  const removeHistoryRun = useCallback(
+    async (runId: string) => {
+      setErr(null);
+      setDeletingRunId(runId);
+      try {
+        await deleteHistoryRun(runId);
+        setSelectedRun((prev) => (prev === runId ? null : prev));
+        if (selectedRun === runId) {
+          setComparative(null);
+        }
+        setActiveJob((prev) => {
+          if (!prev?.save_dir) return prev;
+          const norm = prev.save_dir.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+          const prefix = `runs/${runId}`;
+          if (norm === prefix || norm.startsWith(`${prefix}/`)) return null;
+          return prev;
+        });
+        await refresh();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Delete run failed");
+      } finally {
+        setDeletingRunId(null);
+      }
+    },
+    [refresh, selectedRun],
+  );
+
   return {
     apiOk,
     datasets,
@@ -121,10 +195,16 @@ export function useDashboard() {
     err,
     starting,
     cancelling,
+    clearingHistory,
+    deletingRunId,
     anyDatasetReady,
     refresh,
     runExperiment,
     cancelRun,
     onSelectRun,
+    openJob,
+    dismissActiveJob,
+    wipeHistory,
+    removeHistoryRun,
   };
 }
