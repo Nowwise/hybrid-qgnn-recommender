@@ -216,8 +216,18 @@ export function App() {
 
                 {selectedRun && comparative && comparative.length > 0 && (
                   <div className="subpanel">
-                    <h3 className="subpanel__title">Best validation snapshot · {selectedRun}</h3>
-                    <div className="table-wrap" tabIndex={0} role="region" aria-label="Comparative metrics">
+                    <h3 className="subpanel__title">Model comparison · {selectedRun}</h3>
+                    <p className="subpanel__hint" style={{ margin: "0 0 0.75rem", fontSize: "0.82rem", color: "var(--text-tertiary)" }}>
+                      Val metrics at best-AUC epoch, sampled ranking (val / test), and hybrid minus LightGCN where both exist.
+                      Scroll horizontally if the table is wide.
+                    </p>
+                    <div
+                      className="table-wrap table-wrap--wide"
+                      tabIndex={0}
+                      role="region"
+                      aria-label="Comparative metrics"
+                      style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}
+                    >
                       <table className="data-table">
                         <thead>
                           <tr>
@@ -253,8 +263,12 @@ export function App() {
 
                 {selectedRun && comparative && comparative.length === 0 && (
                   <p className="empty-state" style={{ padding: "1.25rem 0 0", textAlign: "left" }}>
-                    No comparative CSV for this run. Re-train with the current pipeline to generate{" "}
-                    <span className="code-inline">val_best_comparative.csv</span>.
+                    No comparable metrics for this run (empty or timing-only{" "}
+                    <span className="code-inline">metrics.csv</span>). Run a full experiment, or ensure the CSV contains
+                    validation rows (<span className="code-inline">split=val</span>) and/or ranking rows (
+                    <span className="code-inline">val_ranking</span> / <span className="code-inline">test_ranking</span>
+                    ). The API builds <span className="code-inline">full_model_comparative.csv</span> automatically when
+                    you open this panel.
                   </p>
                 )}
               </>

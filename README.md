@@ -124,7 +124,7 @@ The goal of the research is to explore whether the integration of quantum comput
 - **Splits:** `val_ranking` uses validation positives from the same split as training val. **`test_ranking`** (if `eval_test_ranking` is true) uses interactions from **`test.txt`**, restricted to users who appear in the training pair matrix — so it is a **held-out interaction** check, not cold-start users.
 - **Ablation:** rows for **`HybridQGNN (ablation classical head)`** run the same trained hybrid with **`force_classical`** (encoder → linear `fallback` → MLP head, **no** quantum block forward), to separate the effect of the quantum feature map from the rest of the architecture.
 - **Cost / feasibility:** **`phase_timings.json`** stores wall-clock seconds per phase (`prepare_data`, each epoch, `ranking_evaluation`, `analysis_export`). The same timings are duplicated in `metrics.csv` with `split=timing` for plotting.
-- **Tables:** `write_comparative_tables` writes `val_best_comparative.csv`, `val_metrics_per_epoch.csv`, and **`ranking_comparative.csv`** when ranking rows exist.
+- **Tables:** `write_comparative_tables` writes `val_best_comparative.csv`, `val_metrics_per_epoch.csv`, **`ranking_comparative.csv`** (when ranking rows exist), and **`full_model_comparative.csv`** — one wide table with val@best metrics, `val_rank_*`, `test_rank_*`, and **Δ (Hybrid − LightGCN)**. The dashboard loads this (or rebuilds it from `metrics.csv` if the file is missing).
 
 ### Reproducibility and variance
 

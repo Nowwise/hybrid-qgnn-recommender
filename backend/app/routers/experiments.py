@@ -201,12 +201,33 @@ def run_metrics(run_id: str, settings: Settings = Depends(get_settings)):
 
 @router.get("/history/{run_id}/comparative")
 def run_comparative(run_id: str, settings: Settings = Depends(get_settings)):
+    """Wide table: val@best metrics + val/test ranking + Δ row. Built from metrics.csv if needed."""
+    from hybrid_qgnn.analysis.comparative import build_full_model_comparative
+
     run_dir = settings.project_root / "runs" / run_id
-    p = run_dir / "val_best_comparative.csv"
-    if not p.is_file():
-        raise HTTPException(status_code=404, detail="val_best_comparative.csv not found")
-    df = pd.read_csv(p)
-    return df.to_dict(orient="records")
+    if not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    def _rows(df: pd.DataFrame) -> List[Dict[str, Any]]:
+        dfo = df.astype(object).where(pd.notnull(df), None)
+        return dfo.to_dict(orient="records")
+
+    full_p = run_dir / "full_model_comparative.csv"
+    if full_p.is_file():
+        return _rows(pd.read_csv(full_p))
+
+    metrics_p = run_dir / "metrics.csv"
+    if not metrics_p.is_file():
+        raise HTTPException(status_code=404, detail="metrics.csv not found")
+
+    raw = pd.read_csv(metrics_p)
+    merged = build_full_model_comparative(raw)
+    if merged is None or merged.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="No comparable metrics in metrics.csv (need val classification and/or ranking rows).",
+        )
+    return _rows(merged)
 
 
 @router.get("/history/{run_id}/download/metrics.csv")
