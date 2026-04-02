@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { DatasetStatus, ExperimentPresets, JobActivity, JobPublic } from "../api";
 
 const INT_KEYS = new Set([
@@ -15,6 +15,8 @@ const INT_KEYS = new Set([
   "L",
   "eval_every",
   "seed",
+  "ranking_max_users",
+  "ranking_negatives",
 ]);
 
 const FLOAT_KEYS = new Set([
@@ -28,10 +30,22 @@ const FLOAT_KEYS = new Set([
   "p_quantum_end",
 ]);
 
+const BOOL_KEYS = new Set([
+  "eval_ranking",
+  "eval_test_ranking",
+  "eval_hybrid_ablation",
+  "log_phase_timings",
+]);
+
+/** PennyLane device names commonly used with this project (still overridable via custom backend flow if added later). */
+const PENNYLANE_BACKENDS: string[] = ["lightning.qubit", "default.qubit", "default.mixed"];
+
+const CUSTOM_DATA_DIR = "__custom__";
+
 const FORM_GROUPS: { title: string; hint?: string; keys: string[] }[] = [
   {
     title: "Data & I/O",
-    hint: "data_dir: dataset/amazon-book or dataset/movielens-100k (train.txt + test.txt in that folder).",
+    hint: "Dataset: pick a known folder or choose Custom and type a path (train.txt + test.txt required).",
     keys: ["data_dir", "save_dir", "seed"],
   },
   { title: "Sampling", keys: ["max_users", "max_pos_per_user", "neg_per_pos", "val_ratio"] },
@@ -50,13 +64,31 @@ const FORM_GROUPS: { title: string; hint?: string; keys: string[] }[] = [
     hint: "Optional hybrid_lr overrides lr × hybrid_lr_mult for the quantum head phase.",
     keys: ["q", "L", "backend", "epochs_hyb", "hybrid_lr", "hybrid_lr_mult", "p_quantum_start", "p_quantum_end"],
   },
+  {
+    title: "Evaluation",
+    hint: "Ranking metrics and ablation run after training; timing rows go to metrics.csv.",
+    keys: [
+      "eval_ranking",
+      "eval_test_ranking",
+      "eval_hybrid_ablation",
+      "log_phase_timings",
+      "ranking_max_users",
+      "ranking_negatives",
+    ],
+  },
 ];
 
 function recordToForm(r: Record<string, unknown>): Record<string, string> {
   const o: Record<string, string> = {};
   for (const [k, v] of Object.entries(r)) {
     if (v === null || v === undefined) continue;
-    o[k] = typeof v === "number" ? String(v) : String(v);
+    if (typeof v === "boolean") {
+      o[k] = v ? "true" : "false";
+    } else if (typeof v === "number") {
+      o[k] = String(v);
+    } else {
+      o[k] = String(v);
+    }
   }
   return o;
 }
@@ -75,6 +107,9 @@ function buildPayload(
     } else if (FLOAT_KEYS.has(k)) {
       const n = parseFloat(v);
       if (!Number.isNaN(n)) out[k] = n;
+    } else if (BOOL_KEYS.has(k)) {
+      if (v === "true") out[k] = true;
+      else if (v === "false") out[k] = false;
     } else {
       out[k] = v;
     }
@@ -222,9 +257,105 @@ export function ExperimentPanel({
   const canCancel =
     activeJob && (activeJob.status === "running" || activeJob.status === "queued");
 
-  const dataDirKey = (form.data_dir || "dataset/amazon-book").trim();
-  const mountRow = datasets.find((d) => d.data_dir === dataDirKey);
-  const datasetReady = !!(mountRow?.train_txt && mountRow.test_txt);
+  const datasetPathOptions = useMemo(() => {
+    const fromApi = datasets.map((d) => d.data_dir);
+    return fromApi.length > 0 ? fromApi : ["dataset/amazon-book", "dataset/movielens-100k"];
+  }, [datasets]);
+
+  const dataDirTrim = (form.data_dir ?? "").trim();
+  const dataDirIsCustom = !datasetPathOptions.includes(dataDirTrim);
+
+  const backendOptions = useMemo(() => {
+    const cur = (form.backend ?? "").trim();
+    const base = [...PENNYLANE_BACKENDS];
+    if (cur && !base.includes(cur)) base.push(cur);
+    return base;
+  }, [form.backend]);
+
+  const mountRow = datasets.find((d) => d.data_dir === dataDirTrim);
+  const datasetReady = dataDirIsCustom
+    ? dataDirTrim.length > 0
+    : !!(mountRow?.train_txt && mountRow?.test_txt);
+
+  function fieldControl(key: string): ReactNode {
+    if (key === "data_dir") {
+      return (
+        <div className="exp-form__stack">
+          <select
+            className="exp-form__select"
+            aria-label="Choose dataset folder"
+            value={dataDirIsCustom ? CUSTOM_DATA_DIR : dataDirTrim}
+            onChange={(e) => {
+              if (e.target.value === CUSTOM_DATA_DIR) setField("data_dir", "");
+              else setField("data_dir", e.target.value);
+            }}
+          >
+            {datasetPathOptions.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+            <option value={CUSTOM_DATA_DIR}>Custom path…</option>
+          </select>
+          {dataDirIsCustom && (
+            <input
+              className="exp-form__input"
+              value={form.data_dir ?? ""}
+              onChange={(e) => setField("data_dir", e.target.value)}
+              placeholder="e.g. dataset/my-benchmark"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          )}
+        </div>
+      );
+    }
+
+    if (key === "backend") {
+      const cur = (form.backend ?? "").trim();
+      const sel = backendOptions.includes(cur) ? cur : backendOptions[0];
+      return (
+        <select
+          className="exp-form__select"
+          aria-label="PennyLane device"
+          value={sel}
+          onChange={(e) => setField("backend", e.target.value)}
+        >
+          {backendOptions.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (BOOL_KEYS.has(key)) {
+      const bv = form[key] === "false" ? "false" : "true";
+      return (
+        <select
+          className="exp-form__select"
+          aria-label={key}
+          value={bv}
+          onChange={(e) => setField(key, e.target.value)}
+        >
+          <option value="true">On</option>
+          <option value="false">Off</option>
+        </select>
+      );
+    }
+
+    return (
+      <input
+        className="exp-form__input"
+        value={form[key] ?? ""}
+        onChange={(e) => setField(key, e.target.value)}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={key.includes("lr") && key !== "lr" ? "optional" : undefined}
+      />
+    );
+  }
 
   return (
     <section className="card" aria-labelledby="card-run-heading">
@@ -257,8 +388,9 @@ export function ExperimentPanel({
       </p>
       {!datasetReady && presets && (
         <p className="card__body" style={{ marginTop: "0.5rem", color: "var(--rose)" }}>
-          Selected <span className="mono">{dataDirKey}</span> is missing <span className="code-inline">train.txt</span>{" "}
-          or <span className="code-inline">test.txt</span> — fix paths or choose another dataset.
+          {!dataDirTrim
+            ? "Choose a dataset folder or enter a custom path."
+            : `Selected ${dataDirTrim} is missing train.txt or test.txt under the project root.`}
         </p>
       )}
 
@@ -303,14 +435,7 @@ export function ExperimentPanel({
                 {g.keys.map((key) => (
                   <label key={key} className="exp-form__field">
                     <span className="exp-form__key mono">{key}</span>
-                    <input
-                      className="exp-form__input"
-                      value={form[key] ?? ""}
-                      onChange={(e) => setField(key, e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder={key.includes("lr") && key !== "lr" ? "optional" : undefined}
-                    />
+                    {fieldControl(key)}
                   </label>
                 ))}
               </div>
