@@ -28,15 +28,26 @@ def list_runs(runs_root: Path) -> List[RunSummary]:
             continue
         summary_p = child / "summary.txt"
         metrics_p = child / "metrics.csv"
+        cfg_p = child / "run_config.json"
         lg = hy = None
+        exp_name = None
         if summary_p.is_file():
             lg, hy = _parse_summary_auc(summary_p.read_text())
+        if cfg_p.is_file():
+            try:
+                data = json.loads(cfg_p.read_text())
+                raw = data.get("experiment_name")
+                if isinstance(raw, str) and raw.strip():
+                    exp_name = raw.strip()
+            except (json.JSONDecodeError, OSError):
+                pass
         out.append(
             RunSummary(
                 run_id=child.name,
                 path=str(child),
                 has_metrics=metrics_p.is_file(),
                 has_summary=summary_p.is_file(),
+                experiment_name=exp_name,
                 best_lightgcn_auc=lg,
                 best_hybrid_auc=hy,
             )

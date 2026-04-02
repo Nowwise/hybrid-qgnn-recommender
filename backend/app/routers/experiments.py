@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
@@ -14,6 +15,13 @@ from app.services.jobs import cancel_job, get_job, list_jobs, submit_training
 from app.services.runs import list_runs, read_run_config
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
+
+
+def _slugify_run_dir_segment(raw: str) -> str:
+    s = raw.strip().lower()
+    s = re.sub(r"[^a-z0-9._-]+", "_", s)
+    s = re.sub(r"_+", "_", s).strip("._-")
+    return s[:120] if s else "run"
 
 
 def _base_from_body(body: ExperimentStartBody):
@@ -32,8 +40,6 @@ def _base_from_body(body: ExperimentStartBody):
 def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
     cfg = _base_from_body(body)
 
-    if body.save_dir is not None:
-        cfg.save_dir = body.save_dir
     if body.data_dir is not None:
         cfg.data_dir = body.data_dir
     if body.max_users is not None:
@@ -110,10 +116,21 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
             pass
         cfg.compute_mode = cm
 
+    exp_name = (body.experiment_name or "").strip()
+    if exp_name:
+        cfg.experiment_name = exp_name
+
     p = (body.preset or "").lower()
     is_light = body.quick_demo or p in ("quick", "lightweight", "light")
-    if is_light and body.save_dir is None:
-        cfg.save_dir = f"./runs/quick_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+    if body.save_dir is not None:
+        cfg.save_dir = body.save_dir
+    elif exp_name:
+        slug = _slugify_run_dir_segment(exp_name)
+        cfg.save_dir = f"./runs/{slug}_{ts}"
+    elif is_light:
+        cfg.save_dir = f"./runs/quick_{ts}"
 
     return cfg
 

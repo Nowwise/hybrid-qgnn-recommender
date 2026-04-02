@@ -28,6 +28,11 @@ class ExperimentStartBody(BaseModel):
         description="If true, same as lightweight preset (small fast run).",
     )
     save_dir: Optional[str] = Field(default=None, description="Relative to project root, e.g. runs/my_exp")
+    experiment_name: Optional[str] = Field(
+        default=None,
+        description="Friendly run label. If save_dir is omitted or empty, output goes to runs/<slug>_<UTC timestamp>.",
+        max_length=200,
+    )
     data_dir: Optional[str] = None
     max_users: Optional[int] = None
     max_pos_per_user: Optional[int] = None
@@ -69,6 +74,22 @@ class ExperimentStartBody(BaseModel):
         default=None,
         description="K values for Recall/NDCG/HitRatio (e.g. [10, 20, 50]); need ranking_negatives >= max(K).",
     )
+
+    @field_validator("experiment_name", mode="before")
+    @classmethod
+    def _strip_experiment_name(cls, v: Any) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        s = str(v).strip()
+        return s if s else None
+
+    @field_validator("save_dir", mode="before")
+    @classmethod
+    def _empty_save_dir_to_none(cls, v: Any) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        s = str(v).strip()
+        return s if s else None
 
     @field_validator("ranking_ks", mode="before")
     @classmethod
@@ -142,6 +163,7 @@ class RunSummary(BaseModel):
     path: str
     has_metrics: bool
     has_summary: bool
+    experiment_name: Optional[str] = None
     best_lightgcn_auc: Optional[float] = None
     best_hybrid_auc: Optional[float] = None
 

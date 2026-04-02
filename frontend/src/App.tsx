@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useDashboard } from "./hooks/useDashboard";
 import { ExperimentPanel } from "./components/ExperimentPanel";
 import { IconAlert, IconServer, IconTable } from "./components/Icons";
@@ -30,6 +31,16 @@ export function App() {
     cancelRun,
     onSelectRun,
   } = useDashboard();
+
+  const selectedRunMeta = useMemo(() => {
+    if (!selectedRun) return { title: "", folder: "" as string | null };
+    const row = history.find((h) => h.run_id === selectedRun);
+    const name = row?.experiment_name?.trim();
+    return {
+      title: name || selectedRun,
+      folder: name ? selectedRun : null,
+    };
+  }, [history, selectedRun]);
 
   const apiVariant = apiOk === null ? "pending" : apiOk ? "ok" : "bad";
   const apiLabel = apiOk === null ? "Checking API" : apiOk ? "API online" : "API offline";
@@ -189,7 +200,8 @@ export function App() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th scope="col">Run ID</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Folder</th>
                         <th scope="col">LightGCN val AUC</th>
                         <th scope="col">Hybrid val AUC</th>
                         <th scope="col">Metrics</th>
@@ -210,9 +222,10 @@ export function App() {
                           tabIndex={0}
                           role="button"
                           aria-pressed={selectedRun === h.run_id}
-                          aria-label={`Run ${h.run_id}, select for comparison table`}
+                          aria-label={`Run ${h.experiment_name?.trim() || h.run_id}, folder ${h.run_id}, select for comparison`}
                         >
-                          <td className="strong">{h.run_id}</td>
+                          <td className="strong">{h.experiment_name?.trim() || "—"}</td>
+                          <td className="mono">{h.run_id}</td>
                           <td className="mono">{h.best_lightgcn_auc?.toFixed(4) ?? "—"}</td>
                           <td className="mono">{h.best_hybrid_auc?.toFixed(4) ?? "—"}</td>
                           <td>
@@ -228,7 +241,15 @@ export function App() {
 
                 {selectedRun && comparative && comparative.length > 0 && (
                   <div className="subpanel">
-                    <h3 className="subpanel__title">Model comparison · {selectedRun}</h3>
+                    <h3 className="subpanel__title">Model comparison · {selectedRunMeta.title}</h3>
+                    {selectedRunMeta.folder && (
+                      <p
+                        className="subpanel__hint mono"
+                        style={{ margin: "0 0 0.75rem", fontSize: "0.78rem", color: "var(--text-tertiary)" }}
+                      >
+                        {selectedRunMeta.folder}
+                      </p>
+                    )}
                     <p className="subpanel__hint" style={{ margin: "0 0 0.75rem", fontSize: "0.82rem", color: "var(--text-tertiary)" }}>
                       Val metrics at best-AUC epoch, sampled ranking (val / test), and hybrid minus LightGCN where both exist.
                       Scroll horizontally if the table is wide.

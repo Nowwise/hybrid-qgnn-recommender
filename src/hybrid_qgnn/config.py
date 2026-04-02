@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 class ExperimentConfig:
     data_dir: str = "dataset/amazon-book"
     save_dir: str = "./runs/default"
+    # Optional friendly label for this run; stored in run_config.json (UI / org). Only affects save_dir when API merges a name with an empty save_dir override.
+    experiment_name: Optional[str] = None
 
     max_users: int = 6000
     max_pos_per_user: int = 10

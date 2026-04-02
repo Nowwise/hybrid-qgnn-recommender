@@ -54,6 +54,7 @@ export type RunSummary = {
   path: string;
   has_metrics: boolean;
   has_summary: boolean;
+  experiment_name?: string | null;
   best_lightgcn_auc: number | null;
   best_hybrid_auc: number | null;
 };

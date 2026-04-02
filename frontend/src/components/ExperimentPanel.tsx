@@ -56,31 +56,205 @@ type ComputeModeId = "auto" | "cpu" | "gpu";
 
 const CUSTOM_DATA_DIR = "__custom__";
 
+/** User-facing copy; second line is the API/config key for power users and docs. */
+const FIELD_META: Record<string, { label: string; param: string }> = {
+  experiment_name: {
+    label: "Experiment display name",
+    param: "experiment_name",
+  },
+  data_dir: {
+    label: "Dataset folder",
+    param: "data_dir",
+  },
+  save_dir: {
+    label: "Output folder (relative to project)",
+    param: "save_dir",
+  },
+  seed: {
+    label: "Random seed",
+    param: "seed",
+  },
+  max_users: {
+    label: "Max users to include",
+    param: "max_users",
+  },
+  max_pos_per_user: {
+    label: "Max training positives per user",
+    param: "max_pos_per_user",
+  },
+  neg_per_pos: {
+    label: "Negative samples per positive (training pairs)",
+    param: "neg_per_pos",
+  },
+  val_ratio: {
+    label: "Share of data held out for validation",
+    param: "val_ratio",
+  },
+  batch_size: {
+    label: "Batch size (users × items samples per step)",
+    param: "batch_size",
+  },
+  micro_bs: {
+    label: "Micro-batch size (quantum forward, smaller = less memory)",
+    param: "micro_bs",
+  },
+  lr: {
+    label: "Base learning rate",
+    param: "lr",
+  },
+  wd: {
+    label: "Weight decay (L2 regularization)",
+    param: "wd",
+  },
+  eval_every: {
+    label: "Validate every N epochs",
+    param: "eval_every",
+  },
+  d: {
+    label: "Embedding size (vector length per user/item)",
+    param: "d",
+  },
+  K: {
+    label: "Graph conv layers (how many hops on the graph)",
+    param: "K",
+  },
+  epochs_lg: {
+    label: "LightGCN epochs",
+    param: "epochs_lg",
+  },
+  lightgcn_lr: {
+    label: "LightGCN learning rate (optional, else base LR)",
+    param: "lightgcn_lr",
+  },
+  q: {
+    label: "Number of qubits (quantum width)",
+    param: "q",
+  },
+  L: {
+    label: "Quantum layer depth (stacked blocks)",
+    param: "L",
+  },
+  backend: {
+    label: "Quantum simulator device (PennyLane)",
+    param: "backend",
+  },
+  epochs_hyb: {
+    label: "Hybrid model epochs",
+    param: "epochs_hyb",
+  },
+  hybrid_lr: {
+    label: "Hybrid head learning rate (optional, else scaled base LR)",
+    param: "hybrid_lr",
+  },
+  hybrid_lr_mult: {
+    label: "Hybrid LR multiplier vs base (if hybrid LR empty)",
+    param: "hybrid_lr_mult",
+  },
+  p_quantum_start: {
+    label: "Quantum blend at start (0–1, how much quantum early on)",
+    param: "p_quantum_start",
+  },
+  p_quantum_end: {
+    label: "Quantum blend at end (usually 1 = full quantum)",
+    param: "p_quantum_end",
+  },
+  eval_ranking: {
+    label: "Rank top-K metrics after training",
+    param: "eval_ranking",
+  },
+  eval_test_ranking: {
+    label: "Also evaluate ranking on test split",
+    param: "eval_test_ranking",
+  },
+  eval_hybrid_ablation: {
+    label: "Run hybrid ablation (classical head only)",
+    param: "eval_hybrid_ablation",
+  },
+  log_phase_timings: {
+    label: "Save wall-clock time per phase",
+    param: "log_phase_timings",
+  },
+  ranking_max_users: {
+    label: "Users sampled for ranking evaluation",
+    param: "ranking_max_users",
+  },
+  ranking_negatives: {
+    label: "Random negatives per ranking query (must be ≥ largest K)",
+    param: "ranking_negatives",
+  },
+  ranking_ks: {
+    label: "Top-K cutoffs (comma-separated, e.g. 5, 10, 20, 50)",
+    param: "ranking_ks",
+  },
+};
+
+function fieldMeta(fieldKey: string): { label: string; param: string } {
+  return FIELD_META[fieldKey] ?? { label: humanizeKey(fieldKey), param: fieldKey };
+}
+
+function humanizeKey(fieldKey: string): string {
+  return fieldKey
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function FieldLabel({ fieldKey }: { fieldKey: string }) {
+  const { label, param } = fieldMeta(fieldKey);
+  return (
+    <span className="exp-form__label-stack">
+      <span className="exp-form__label">{label}</span>
+      <span className="exp-form__param mono" title="Name in API requests and saved run_config.json">
+        {param}
+      </span>
+    </span>
+  );
+}
+
+const COMPUTE_MODE_META = {
+  label: "Training hardware (CPU vs GPU and quantum simulator)",
+  param: "compute_mode",
+} as const;
+
+function ComputeModeLabel() {
+  return (
+    <span className="exp-form__label-stack">
+      <span className="exp-form__label">{COMPUTE_MODE_META.label}</span>
+      <span className="exp-form__param mono" title="Name in API requests and saved run_config.json">
+        {COMPUTE_MODE_META.param}
+      </span>
+    </span>
+  );
+}
+
 const FORM_GROUPS: { title: string; hint?: string; keys: string[] }[] = [
   {
     title: "Data & I/O",
-    hint: "Dataset: pick a known folder or choose Custom and type a path (train.txt + test.txt required).",
-    keys: ["data_dir", "save_dir", "seed"],
+    hint: "Pick a dataset that already has train.txt and test.txt, or choose Custom and type the folder path. If you enter a display name and leave the output folder blank, a new runs/… folder is created automatically and the name appears in history.",
+    keys: ["experiment_name", "data_dir", "save_dir", "seed"],
   },
-  { title: "Sampling", keys: ["max_users", "max_pos_per_user", "neg_per_pos", "val_ratio"] },
+  {
+    title: "Sampling",
+    hint: "Controls how much of the interaction data is used to build training pairs and validation.",
+    keys: ["max_users", "max_pos_per_user", "neg_per_pos", "val_ratio"],
+  },
   {
     title: "Training (shared)",
-    hint: "Base lr is used when LightGCN or hybrid learning rate is left empty.",
+    hint: "Settings shared by both training phases. The base learning rate applies when you leave the LightGCN or hybrid rate empty.",
     keys: ["batch_size", "micro_bs", "lr", "wd", "eval_every"],
   },
   {
-    title: "LightGCN",
-    hint: "Optional lightgcn_lr overrides base lr for the encoder-only phase.",
+    title: "LightGCN (classical graph baseline)",
+    hint: "Classical graph encoder that runs before the hybrid model. Optional LightGCN rate overrides the base rate for that phase only.",
     keys: ["d", "K", "epochs_lg", "lightgcn_lr"],
   },
   {
-    title: "Hybrid QGNN",
-    hint: "Optional hybrid_lr overrides lr × hybrid_lr_mult for the quantum head phase.",
+    title: "Hybrid QGNN (quantum head)",
+    hint: "Quantum-augmented phase. You can set a separate hybrid rate, or leave it empty to use base rate × multiplier. Quantum blend ramps from start to end during hybrid training.",
     keys: ["q", "L", "backend", "epochs_hyb", "hybrid_lr", "hybrid_lr_mult", "p_quantum_start", "p_quantum_end"],
   },
   {
     title: "Evaluation",
-    hint: "Ranking metrics and ablation run after training; timing rows go to metrics.csv. ranking_ks: comma-separated integers (e.g. 5, 10, 20, 50); need ranking_negatives ≥ max(K).",
+    hint: "After training: sampled ranking (Recall@K, NDCG, etc.) and optional ablation. List K values with commas; negatives per query must be at least your largest K.",
     keys: [
       "eval_ranking",
       "eval_test_ranking",
@@ -322,7 +496,7 @@ export function ExperimentPanel({
         <div className="exp-form__stack">
           <select
             className="exp-form__select"
-            aria-label="Choose dataset folder"
+            aria-label={fieldMeta("data_dir").label}
             value={dataDirIsCustom ? CUSTOM_DATA_DIR : dataDirTrim}
             onChange={(e) => {
               if (e.target.value === CUSTOM_DATA_DIR) setField("data_dir", "");
@@ -344,6 +518,7 @@ export function ExperimentPanel({
               placeholder="e.g. dataset/my-benchmark"
               autoComplete="off"
               spellCheck={false}
+              aria-label={`${fieldMeta("data_dir").label} — custom path`}
             />
           )}
         </div>
@@ -356,7 +531,7 @@ export function ExperimentPanel({
       return (
         <select
           className="exp-form__select"
-          aria-label="PennyLane device"
+          aria-label={fieldMeta("backend").label}
           value={sel}
           onChange={(e) => setField("backend", e.target.value)}
         >
@@ -374,7 +549,7 @@ export function ExperimentPanel({
       return (
         <select
           className="exp-form__select"
-          aria-label={key}
+          aria-label={fieldMeta(key).label}
           value={bv}
           onChange={(e) => setField(key, e.target.value)}
         >
@@ -384,14 +559,22 @@ export function ExperimentPanel({
       );
     }
 
+    const placeholder =
+      key === "experiment_name"
+        ? "e.g. Amazon-book q=4 baseline"
+        : key.includes("lr") && key !== "lr"
+          ? "optional"
+          : undefined;
+
     return (
       <input
         className="exp-form__input"
         value={form[key] ?? ""}
         onChange={(e) => setField(key, e.target.value)}
         autoComplete="off"
-        spellCheck={false}
-        placeholder={key.includes("lr") && key !== "lr" ? "optional" : undefined}
+        spellCheck={key !== "experiment_name"}
+        placeholder={placeholder}
+        aria-label={fieldMeta(key).label}
       />
     );
   }
@@ -416,19 +599,18 @@ export function ExperimentPanel({
       </div>
 
       <p className="card__body" style={{ marginTop: 0 }}>
-        <strong>Compute</strong> selects PyTorch device and PennyLane simulator for this run (applied after preset
-        fields). <strong>GPU</strong> uses CUDA for LightGCN/hybrid tensors and tries{" "}
-        <span className="code-inline">lightning.gpu</span> for the quantum block when the plugin is installed; otherwise
-        the server falls back to <span className="code-inline">lightning.qubit</span>.
+        The block below chooses whether training uses your <strong>graphics card (GPU)</strong> or <strong>CPU</strong>, and
+        which <strong>quantum simulator</strong> runs the hybrid layer. GPU mode uses CUDA for the neural-network math and
+        prefers a fast GPU-backed simulator when installed; otherwise the server falls back to a CPU quantum simulator.
       </p>
       <div className="exp-form__group compute-profile" style={{ marginBottom: "1rem" }}>
         <div className="exp-form__legend">Compute profile</div>
         <div className="exp-form__grid" style={{ alignItems: "end" }}>
           <label className="exp-form__field">
-            <span className="exp-form__key mono">mode</span>
+            <ComputeModeLabel />
             <select
               className="exp-form__select"
-              aria-label="Compute mode"
+              aria-label={COMPUTE_MODE_META.label}
               value={computeMode}
               onChange={(e) => setComputeMode(e.target.value as ComputeModeId)}
             >
@@ -460,14 +642,14 @@ export function ExperimentPanel({
       </div>
 
       <p className="card__body" style={{ marginTop: 0 }}>
-        Choose <strong>lightweight</strong> for a quick smoke test, <strong>notebook</strong> for the balanced
-        profile, or <strong>custom</strong> starting from library defaults. LightGCN and hybrid phases can use
-        separate learning rates; leave them empty to fall back to the shared base lr (hybrid also respects{" "}
-        <span className="code-inline">hybrid_lr_mult</span>). For lightweight, leave{" "}
-        <span className="code-inline">save_dir</span> empty to auto-create a timestamped{" "}
-        <span className="code-inline">runs/quick_*</span> folder. Set{" "}
-        <span className="code-inline">data_dir</span> to <span className="code-inline">dataset/movielens-100k</span> after
-        running <span className="code-inline">python scripts/prepare_movielens100k.py</span> from the repo root.
+        Choose <strong>lightweight</strong> for a short test, <strong>notebook</strong> for the medium-sized thesis preset, or{" "}
+        <strong>custom</strong> for full defaults. Advanced rates are optional: empty LightGCN or hybrid rate boxes use the shared
+        base learning rate (hybrid also uses the multiplier field when its own rate is empty). To label a run in history, fill{" "}
+        <strong>Experiment display name</strong> and clear <strong>Output folder</strong>; a new timestamped folder under{" "}
+        <span className="code-inline">runs/</span> is created. Lightweight preset without a name: clear output folder for an
+        auto <span className="code-inline">runs/quick_*</span> folder. For MovieLens-100K, set dataset to{" "}
+        <span className="code-inline">dataset/movielens-100k</span> after running{" "}
+        <span className="code-inline">python scripts/prepare_movielens100k.py</span> once from the repo root.
       </p>
       {!datasetReady && presets && (
         <p className="card__body" style={{ marginTop: "0.5rem", color: "var(--rose)" }}>
@@ -517,7 +699,7 @@ export function ExperimentPanel({
               <div className="exp-form__grid">
                 {g.keys.map((key) => (
                   <label key={key} className="exp-form__field">
-                    <span className="exp-form__key mono">{key}</span>
+                    <FieldLabel fieldKey={key} />
                     {fieldControl(key)}
                   </label>
                 ))}

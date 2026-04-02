@@ -871,6 +871,29 @@
   gap: 0.25rem;
 }
 
+.exp-form__label-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.exp-form__label {
+  font-size: 0.78rem;
+  font-weight: 550;
+  line-height: 1.25;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.exp-form__param {
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+  opacity: 0.92;
+}
+
+/* Legacy: single-line technical key (unused after friendly labels). */
 .exp-form__key {
   font-size: 0.65rem;
   text-transform: uppercase;
