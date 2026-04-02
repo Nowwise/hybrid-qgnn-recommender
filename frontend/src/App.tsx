@@ -240,11 +240,11 @@ export function App() {
                       aria-label="Comparative metrics"
                       style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}
                     >
-                      <table className="data-table">
+                      <table className="data-table data-table--sticky-first-col">
                         <thead>
                           <tr>
-                            {Object.keys(comparative[0]).map((k) => (
-                              <th key={k} scope="col">
+                            {Object.keys(comparative[0]).map((k, colIdx) => (
+                              <th key={k} scope="col" className={colIdx === 0 ? "data-table__sticky-head" : undefined}>
                                 {k}
                               </th>
                             ))}
@@ -253,8 +253,13 @@ export function App() {
                         <tbody>
                           {comparative.map((row, i) => (
                             <tr key={i}>
-                              {Object.values(row).map((v, j) => (
-                                <td key={j} className="mono">
+                              {Object.entries(row).map(([k, v], j) => (
+                                <td
+                                  key={k}
+                                  className={
+                                    j === 0 ? "data-table__sticky-cell mono data-table__cell-model" : "mono"
+                                  }
+                                >
                                   {v === null || v === undefined ? "—" : String(v)}
                                 </td>
                               ))}

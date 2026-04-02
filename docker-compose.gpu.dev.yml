@@ -1,0 +1,8 @@
+# Optional: mount source into the GPU API container for local edits without rebuild.
+# docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.gpu.dev.yml up --build
+services:
+  api:
+    volumes:
+      - ./src:/app/src
+      - ./backend:/app/backend
+      - ./scripts:/app/scripts

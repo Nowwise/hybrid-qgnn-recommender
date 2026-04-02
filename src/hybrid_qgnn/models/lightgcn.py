@@ -1,8 +1,35 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import numpy as np
 import torch
 import torch.nn as nn
+
+
+class _SparseDenseMM(torch.autograd.Function):
+    """Sparse @ dense matmul in float32; AMP cannot use Half in CUDA sparse backward."""
+
+    @staticmethod
+    def forward(ctx, A: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        if not A.is_sparse:
+            raise ValueError("_SparseDenseMM expects sparse A")
+        ctx.save_for_backward(A, x)
+        return torch.sparse.mm(A, x.float())
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        if grad_output is None:
+            return None, None
+        A, x = ctx.saved_tensors
+        go = grad_output.float()
+        At = A.transpose(0, 1).coalesce()
+        grad_x = torch.sparse.mm(At, go)
+        return None, grad_x.to(dtype=x.dtype, device=x.device)
+
+
+def _sparse_mm_fp32_safe(A: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    return _SparseDenseMM.apply(A, x)
 
 
 class LightGCNLite(nn.Module):
@@ -22,12 +49,18 @@ class LightGCNLite(nn.Module):
         return torch.sparse_coo_tensor(idx, val, torch.Size(A.shape)).coalesce()
 
     def propagate(self):
-        embs = [self.E.weight]
-        x = self.E.weight
-        for _ in range(self.K):
-            x = torch.sparse.mm(self.A.to(x.device), x)
-            embs.append(x)
-        return torch.stack(embs).mean(dim=0)
+        A = self.A.to(self.E.weight.device)
+        w = self.E.weight
+        embs = [w]
+        x = w
+        # Nested off: keeps sparse ops out of autocast; custom Function fixes backward half-grads from AMP above.
+        amp_off = torch.amp.autocast("cuda", enabled=False) if w.is_cuda else nullcontext()
+        with amp_off:
+            for _ in range(self.K):
+                x = _sparse_mm_fp32_safe(A, x)
+                embs.append(x)
+            out = torch.stack(embs).mean(dim=0)
+        return out
 
     def forward(self, u, i):
         all_emb = self.propagate()

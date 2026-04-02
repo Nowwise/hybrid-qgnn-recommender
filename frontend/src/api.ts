@@ -66,6 +66,17 @@ export type ExperimentPresets = {
   full?: Record<string, unknown>;
 };
 
+export type QuantumSimulatorStatus = { available: boolean; error?: string };
+
+export type ExperimentDeviceOverview = {
+  torch_version: string;
+  cuda_available: boolean;
+  cuda_device_count: number;
+  cuda_version: string | null;
+  devices: { id: string; kind: string; name: string }[];
+  quantum_simulators: Record<string, QuantumSimulatorStatus>;
+};
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${BASE}${path}`, {
     ...init,
@@ -88,6 +99,10 @@ export function getDatasetStatus() {
 
 export function getExperimentPresets() {
   return fetchJson<ExperimentPresets>("/experiments/presets");
+}
+
+export function getExperimentDevice() {
+  return fetchJson<ExperimentDeviceOverview>("/experiments/device");
 }
 
 /** Start a run: pass preset + any config fields (snake_case) to merge on the server. */

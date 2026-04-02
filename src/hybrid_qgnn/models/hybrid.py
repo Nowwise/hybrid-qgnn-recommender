@@ -33,15 +33,17 @@ class HybridQGNN(nn.Module):
     def forward(self, u, i, micro_bs=32, force_classical: bool = False):
         all_emb = self.encoder.propagate()
         x = torch.cat([all_emb[u], all_emb[self.encoder.n_users + i]], dim=-1)
+        # Encoder is fp32; AMP makes Linear/quantum outputs fp16 — align before masked writes and the head.
+        out_dtype = x.dtype
         if force_classical:
-            zq = self.fallback(x)
+            zq = self.fallback(x).to(out_dtype)
         elif self.training and self.p_quantum < 1.0:
             mask = torch.rand(x.size(0), device=x.device) < self.p_quantum
-            zq = torch.empty(x.size(0), self.quantum.q, device=x.device, dtype=x.dtype)
+            zq = torch.empty(x.size(0), self.quantum.q, device=x.device, dtype=out_dtype)
             if mask.any():
-                zq[mask] = self.quantum(x[mask], micro_bs=micro_bs)
+                zq[mask] = self.quantum(x[mask], micro_bs=micro_bs).to(out_dtype)
             if (~mask).any():
-                zq[~mask] = self.fallback(x[~mask])
+                zq[~mask] = self.fallback(x[~mask]).to(out_dtype)
         else:
-            zq = self.quantum(x, micro_bs=micro_bs)
+            zq = self.quantum(x, micro_bs=micro_bs).to(out_dtype)
         return self.head(zq).squeeze(-1)

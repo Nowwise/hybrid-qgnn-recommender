@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { DatasetStatus, ExperimentPresets, JobActivity, JobPublic } from "../api";
+import {
+  getExperimentDevice,
+  type DatasetStatus,
+  type ExperimentDeviceOverview,
+  type ExperimentPresets,
+  type JobActivity,
+  type JobPublic,
+} from "../api";
 
 const INT_KEYS = new Set([
   "max_users",
@@ -37,8 +44,15 @@ const BOOL_KEYS = new Set([
   "log_phase_timings",
 ]);
 
-/** PennyLane device names commonly used with this project (still overridable via custom backend flow if added later). */
-const PENNYLANE_BACKENDS: string[] = ["lightning.qubit", "default.qubit", "default.mixed"];
+/** PennyLane device names commonly used with this project (server resolves / falls back at run time). */
+const PENNYLANE_BACKENDS: string[] = [
+  "lightning.qubit",
+  "lightning.gpu",
+  "default.qubit",
+  "default.mixed",
+];
+
+type ComputeModeId = "auto" | "cpu" | "gpu";
 
 const CUSTOM_DATA_DIR = "__custom__";
 
@@ -66,7 +80,7 @@ const FORM_GROUPS: { title: string; hint?: string; keys: string[] }[] = [
   },
   {
     title: "Evaluation",
-    hint: "Ranking metrics and ablation run after training; timing rows go to metrics.csv.",
+    hint: "Ranking metrics and ablation run after training; timing rows go to metrics.csv. ranking_ks: comma-separated integers (e.g. 5, 10, 20, 50); need ranking_negatives ≥ max(K).",
     keys: [
       "eval_ranking",
       "eval_test_ranking",
@@ -74,6 +88,7 @@ const FORM_GROUPS: { title: string; hint?: string; keys: string[] }[] = [
       "log_phase_timings",
       "ranking_max_users",
       "ranking_negatives",
+      "ranking_ks",
     ],
   },
 ];
@@ -86,6 +101,8 @@ function recordToForm(r: Record<string, unknown>): Record<string, string> {
       o[k] = v ? "true" : "false";
     } else if (typeof v === "number") {
       o[k] = String(v);
+    } else if (Array.isArray(v)) {
+      o[k] = v.map((x) => String(x)).join(", ");
     } else {
       o[k] = String(v);
     }
@@ -93,25 +110,39 @@ function recordToForm(r: Record<string, unknown>): Record<string, string> {
   return o;
 }
 
+function parseIntList(raw: string): number[] {
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => parseInt(s, 10))
+    .filter((n) => !Number.isNaN(n));
+}
+
 function buildPayload(
   preset: "lightweight" | "notebook" | "custom",
-  form: Record<string, string>
+  form: Record<string, string>,
+  computeMode: ComputeModeId
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { preset, quick_demo: false };
+  const out: Record<string, unknown> = { preset, quick_demo: false, compute_mode: computeMode };
   for (const [k, raw] of Object.entries(form)) {
+    const key = k.trim();
     const v = raw.trim();
     if (v === "") continue;
-    if (INT_KEYS.has(k)) {
+    if (INT_KEYS.has(key)) {
       const n = parseInt(v, 10);
-      if (!Number.isNaN(n)) out[k] = n;
-    } else if (FLOAT_KEYS.has(k)) {
+      if (!Number.isNaN(n)) out[key] = n;
+    } else if (FLOAT_KEYS.has(key)) {
       const n = parseFloat(v);
-      if (!Number.isNaN(n)) out[k] = n;
-    } else if (BOOL_KEYS.has(k)) {
-      if (v === "true") out[k] = true;
-      else if (v === "false") out[k] = false;
+      if (!Number.isNaN(n)) out[key] = n;
+    } else if (BOOL_KEYS.has(key)) {
+      if (v === "true") out[key] = true;
+      else if (v === "false") out[key] = false;
+    } else if (key === "ranking_ks") {
+      const nums = parseIntList(v);
+      if (nums.length) out[key] = nums;
     } else {
-      out[k] = v;
+      out[key] = v;
     }
   }
   return out;
@@ -210,6 +241,14 @@ export function ExperimentPanel({
 }: Props) {
   const [preset, setPreset] = useState<PresetId>("custom");
   const [form, setForm] = useState<Record<string, string>>({});
+  const [computeMode, setComputeMode] = useState<ComputeModeId>("auto");
+  const [deviceInfo, setDeviceInfo] = useState<ExperimentDeviceOverview | null>(null);
+
+  useEffect(() => {
+    void getExperimentDevice()
+      .then(setDeviceInfo)
+      .catch(() => setDeviceInfo(null));
+  }, []);
 
   const template = useMemo(() => {
     if (!presets) return null;
@@ -377,8 +416,52 @@ export function ExperimentPanel({
       </div>
 
       <p className="card__body" style={{ marginTop: 0 }}>
-        Choose <strong>lightweight</strong> for a quick smoke test, <strong>notebook</strong> for the original notebook
-        balanced profile, or <strong>custom</strong> starting from library defaults. LightGCN and hybrid phases can use
+        <strong>Compute</strong> selects PyTorch device and PennyLane simulator for this run (applied after preset
+        fields). <strong>GPU</strong> uses CUDA for LightGCN/hybrid tensors and tries{" "}
+        <span className="code-inline">lightning.gpu</span> for the quantum block when the plugin is installed; otherwise
+        the server falls back to <span className="code-inline">lightning.qubit</span>.
+      </p>
+      <div className="exp-form__group compute-profile" style={{ marginBottom: "1rem" }}>
+        <div className="exp-form__legend">Compute profile</div>
+        <div className="exp-form__grid" style={{ alignItems: "end" }}>
+          <label className="exp-form__field">
+            <span className="exp-form__key mono">mode</span>
+            <select
+              className="exp-form__select"
+              aria-label="Compute mode"
+              value={computeMode}
+              onChange={(e) => setComputeMode(e.target.value as ComputeModeId)}
+            >
+              <option value="auto">Auto (CUDA if available, else CPU)</option>
+              <option value="cpu">CPU only (PyTorch CPU + lightning.qubit)</option>
+              <option value="gpu">GPU (CUDA + lightning.gpu when possible)</option>
+            </select>
+          </label>
+        </div>
+        {deviceInfo && (
+          <p
+            className="exp-form__hint mono"
+            style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.78rem", lineHeight: 1.45 }}
+          >
+            PyTorch {deviceInfo.torch_version}
+            {deviceInfo.cuda_available
+              ? ` · CUDA ${deviceInfo.cuda_version ?? "?"} (${deviceInfo.cuda_device_count} GPU)`
+              : " · CUDA not available"}
+            {" · "}
+            <span className={deviceInfo.quantum_simulators?.["lightning.gpu"]?.available ? "" : "path-display--warn"}>
+              lightning.gpu {deviceInfo.quantum_simulators?.["lightning.gpu"]?.available ? "OK" : "unavailable"}
+            </span>
+            {deviceInfo.quantum_simulators?.["lightning.gpu"]?.error && !deviceInfo.quantum_simulators["lightning.gpu"].available
+              ? ` — ${deviceInfo.quantum_simulators["lightning.gpu"].error!.slice(0, 120)}`
+              : ""}
+          </p>
+        )}
+        {!deviceInfo && <p className="exp-form__hint">Loading device probe…</p>}
+      </div>
+
+      <p className="card__body" style={{ marginTop: 0 }}>
+        Choose <strong>lightweight</strong> for a quick smoke test, <strong>notebook</strong> for the balanced
+        profile, or <strong>custom</strong> starting from library defaults. LightGCN and hybrid phases can use
         separate learning rates; leave them empty to fall back to the shared base lr (hybrid also respects{" "}
         <span className="code-inline">hybrid_lr_mult</span>). For lightweight, leave{" "}
         <span className="code-inline">save_dir</span> empty to auto-create a timestamped{" "}
@@ -449,7 +532,7 @@ export function ExperimentPanel({
           type="button"
           className="btn btn--primary"
           disabled={starting || !datasetReady || !presets}
-          onClick={() => onRun(buildPayload(preset, form))}
+          onClick={() => onRun(buildPayload(preset, form, computeMode))}
         >
           {starting ? "Starting…" : "Run with settings above"}
         </button>

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class JobStatus(str, Enum):
@@ -50,6 +51,17 @@ class ExperimentStartBody(BaseModel):
     p_quantum_start: Optional[float] = None
     p_quantum_end: Optional[float] = None
     seed: Optional[int] = None
+    device: Optional[str] = Field(
+        default=None,
+        description='Training device: omit for env QGNN_DEVICE or auto. '
+        'Values: "auto", "cpu", "cuda", "cuda:0", …',
+    )
+    compute_mode: Optional[Literal["auto", "cpu", "gpu"]] = Field(
+        default=None,
+        description='Applied last: "auto" keeps merged preset/device/backend; '
+        '"cpu" forces CPU PyTorch + lightning.qubit; '
+        '"gpu" uses CUDA + lightning.gpu (falls back in training if unavailable).',
+    )
     eval_ranking: Optional[bool] = None
     ranking_max_users: Optional[int] = None
     ranking_negatives: Optional[int] = None
@@ -57,6 +69,22 @@ class ExperimentStartBody(BaseModel):
         default=None,
         description="K values for Recall/NDCG/HitRatio (e.g. [10, 20, 50]); need ranking_negatives >= max(K).",
     )
+
+    @field_validator("ranking_ks", mode="before")
+    @classmethod
+    def _coerce_ranking_ks(cls, v: Any) -> Optional[List[int]]:
+        """Accept JSON list or comma-separated string (some clients send form-style strings)."""
+        if v is None or v == "":
+            return None
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        if isinstance(v, str):
+            parts = [p for p in re.split(r"[,;\s]+", v.strip()) if p]
+            if not parts:
+                return None
+            return [int(p) for p in parts]
+        raise ValueError("ranking_ks must be a list of integers or a comma-separated string")
+
     eval_test_ranking: Optional[bool] = None
     eval_hybrid_ablation: Optional[bool] = None
     log_phase_timings: Optional[bool] = None

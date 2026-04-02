@@ -45,6 +45,12 @@ class ExperimentConfig:
 
     seed: int = 42
 
+    # Training compute: None → env QGNN_DEVICE or "auto". Use "cpu", "cuda", "cuda:0", "auto".
+    device: Optional[str] = None
+
+    # API/UI only: "auto" | "cpu" | "gpu" — echoed in run_config; server applies before run if set.
+    compute_mode: Optional[str] = None
+
     # Sampled ranking metrics (Recall@K / NDCG@K / HitRatio@K) — thesis-style implicit ranking eval
     eval_ranking: bool = True
     ranking_max_users: int = 512

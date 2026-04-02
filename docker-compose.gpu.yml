@@ -1,0 +1,16 @@
+# Linux GPU stack (PyTorch CUDA + pennylane-lightning-gpu). Use this on Windows via Docker Desktop
+# (WSL2 backend + GPU) so lightning.gpu / custatevec run — native Windows pip cannot install them.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+# One-shot smoke (quantum + classical on GPU):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm -e PYTHONPATH=/app/src api python /app/scripts/verify_gpu_smoke.py
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api.gpu
+    environment:
+      QGNN_PROJECT_ROOT: /app
+      QGNN_DEVICE: cuda
+    gpus: all

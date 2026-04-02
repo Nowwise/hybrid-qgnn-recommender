@@ -1,4 +1,4 @@
-# API: Python + PyTorch + PennyLane (CPU). Build from repo root: docker build -f docker/Dockerfile.api .
+# API: Python + PyTorch + PennyLane (CPU wheels). Build from repo root: docker build -f docker/Dockerfile.api .
 FROM python:3.12-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -7,10 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY docker/requirements.docker.txt ./requirements.docker.txt
+COPY requirements-base.txt requirements-cpu.txt ./
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.docker.txt \
-        --extra-index-url https://download.pytorch.org/whl/cpu
+    && pip install --no-cache-dir -r requirements-cpu.txt
 
 COPY src ./src
 COPY backend ./backend

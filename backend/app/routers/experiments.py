@@ -80,6 +80,8 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
         cfg.p_quantum_end = body.p_quantum_end
     if body.seed is not None:
         cfg.seed = body.seed
+    if body.device is not None:
+        cfg.device = body.device
     if body.eval_ranking is not None:
         cfg.eval_ranking = body.eval_ranking
     if body.ranking_max_users is not None:
@@ -95,12 +97,33 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
     if body.log_phase_timings is not None:
         cfg.log_phase_timings = body.log_phase_timings
 
+    # Last: whole-run compute profile (overrides preset device/backend for this job)
+    if body.compute_mode is not None:
+        cm = body.compute_mode.strip().lower()
+        if cm == "cpu":
+            cfg.device = "cpu"
+            cfg.backend = "lightning.qubit"
+        elif cm == "gpu":
+            cfg.device = "cuda"
+            cfg.backend = "lightning.gpu"
+        elif cm == "auto":
+            pass
+        cfg.compute_mode = cm
+
     p = (body.preset or "").lower()
     is_light = body.quick_demo or p in ("quick", "lightweight", "light")
     if is_light and body.save_dir is None:
         cfg.save_dir = f"./runs/quick_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
     return cfg
+
+
+@router.get("/device")
+def experiment_device():
+    """Report PyTorch/CUDA visibility and selectable device ids (for UI or debugging)."""
+    from hybrid_qgnn.device import compute_device_summary
+
+    return compute_device_summary()
 
 
 @router.get("/presets")

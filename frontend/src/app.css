@@ -679,6 +679,31 @@
   opacity: 0.85;
 }
 
+/* Comparative table: keep model column visible on horizontal scroll */
+.data-table--sticky-first-col thead th.data-table__sticky-head,
+.data-table--sticky-first-col tbody td.data-table__sticky-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 4px 0 10px -2px rgba(0, 0, 0, 0.55);
+  background-clip: padding-box;
+}
+
+.data-table--sticky-first-col thead th.data-table__sticky-head {
+  z-index: 3;
+  background: var(--surface);
+}
+
+.data-table--sticky-first-col tbody td.data-table__cell-model {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.data-table--sticky-first-col tbody tr:hover td.data-table__sticky-cell {
+  background: var(--surface-hover);
+}
+
 /* Comparative sub-table */
 .subpanel {
   margin-top: 1.5rem;

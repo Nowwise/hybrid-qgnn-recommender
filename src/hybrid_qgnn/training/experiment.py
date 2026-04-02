@@ -12,6 +12,7 @@ import numpy as np
 import torch
 
 from hybrid_qgnn.config import ExperimentConfig
+from hybrid_qgnn.device import resolve_quantum_backend, resolve_training_device
 from hybrid_qgnn.data import (
     build_norm_adj_from_train_pairs,
     load_lightgcn_interaction_dir,
@@ -222,7 +223,8 @@ def run_experiment(
     if not data_path.is_dir():
         raise FileNotFoundError(f"Data directory not found: {data_path}")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device, device_meta = resolve_training_device(cfg.device)
+    q_backend, q_meta = resolve_quantum_backend(cfg.backend, device)
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
 
@@ -273,6 +275,8 @@ def run_experiment(
 
     logger = MetricsLogger(save_dir)
     run_cfg = cfg.to_dict()
+    run_cfg["device_info"] = {"torch_device": str(device), **device_meta}
+    run_cfg["quantum_backend_info"] = {"pennylane_device": q_backend, **q_meta}
     with open(save_dir / "run_config.json", "w") as f:
         json.dump(run_cfg, f, indent=2)
 
@@ -418,7 +422,7 @@ def run_experiment(
         q=cfg.q,
         L=cfg.L,
         p_quantum=tcfg.p_quantum_start,
-        dev_name=cfg.backend,
+        dev_name=q_backend,
     ).to(device)
     opt_hyb = torch.optim.Adam(hyb.parameters(), lr=tcfg.hybrid_lr, weight_decay=tcfg.wd)
     best_hyb = {"auc": -1.0, "ep": 0}
@@ -635,7 +639,8 @@ def run_experiment(
                 lightgcn="done",
                 hybrid_warmup="done",
                 hybrid_train="running" if ep < tcfg.epochs_hyb else "done",
-                analysis="pending" if ep < tcfg.epochs_hyb else "running",
+                # Keep "Metrics & tables" pending until ranking / CSV export — not while ranking is still running.
+                analysis="pending",
                 event_message=f"Hybrid ep {ep} val AUC={m['AUC']:.4f}",
             )
 
@@ -643,6 +648,17 @@ def run_experiment(
         raise ExperimentCancelled()
 
     if cfg.eval_ranking:
+        rep.push(
+            rep.base_analysis(),
+            "Analysis",
+            "Ranking evaluation (Recall@K / NDCG@K) — can take several minutes on larger settings",
+            prepare="done",
+            lightgcn="done",
+            hybrid_warmup="done",
+            hybrid_train="done",
+            analysis="running",
+            event_message="Starting sampled ranking metrics",
+        )
         with _timed(phase_timings, "ranking_evaluation"):
             _run_ranking_evaluations(
                 cfg,
@@ -655,7 +671,7 @@ def run_experiment(
                 cfg.q,
                 cfg.L,
                 A_norm,
-                cfg.backend,
+                q_backend,
                 Xtr,
                 ytr,
                 Xva,
@@ -690,6 +706,10 @@ def run_experiment(
         event_message="Exporting comparative tables",
     )
     _legacy("analysis", None)
+    # Comparative tables read metrics.csv from disk — must flush logger first (was only in memory until now).
+    logger.save_csv("metrics.csv")
+    logger.save_json("metrics.json")
+
     from hybrid_qgnn.analysis.comparative import write_comparative_tables
 
     with _timed(phase_timings, "analysis_export"):
@@ -705,9 +725,8 @@ def run_experiment(
                 epoch=0,
                 value=float(row["seconds"]),
             )
-
-    logger.save_csv("metrics.csv")
-    logger.save_json("metrics.json")
+        logger.save_csv("metrics.csv")
+        logger.save_json("metrics.json")
 
     rep.push(
         rep.M,
@@ -729,4 +748,7 @@ def run_experiment(
         "best_hybrid_auc": best_hyb["auc"],
         "best_hybrid_epoch": best_hyb["ep"],
         "device": str(device),
+        "device_info": device_meta,
+        "quantum_backend": q_backend,
+        "quantum_backend_info": q_meta,
     }

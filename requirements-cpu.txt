@@ -1,0 +1,4 @@
+# CPU PyTorch: PyPI + PyTorch CPU wheel index (extra, so PyPI stays primary).
+--extra-index-url https://download.pytorch.org/whl/cpu
+-r requirements-base.txt
+torch>=2.0.0

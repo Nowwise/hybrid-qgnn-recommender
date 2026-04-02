@@ -39,6 +39,66 @@ Set `data_dir` to `dataset/movielens-100k` in the dashboard or API to train on t
 
 ---
 
+## GPU acceleration (NVIDIA)
+
+Training uses PyTorch; **CUDA** speeds up the classical (LightGCN / hybrid) parts. With `pennylane-lightning-gpu` installed, the **quantum simulator** can use **`lightning.gpu`** (see `compute_mode` / `GET /api/experiments/device`).
+
+**Local Windows / Linux (venv):**
+
+1. Install an [NVIDIA driver](https://www.nvidia.com/Download/index.aspx) compatible with **CUDA 12.4** PyTorch wheels (newer drivers usually work).
+2. From the repo root, install in order (PyPI + deps, then CUDA `torch`, then optional quantum GPU plugin):
+   ```bash
+   pip install -r requirements-base.txt
+   pip install -r requirements-gpu-torch.txt
+   pip install -r requirements-gpu-quantum.txt
+   ```
+   The last line may fail on Windows without a matching wheel — safe to skip. **Or** run `scripts/install_gpu.ps1` (installs all three, tolerates quantum pip failure, then runs `verify_gpu_smoke.py`).
+3. Optional: `set QGNN_DEVICE=cuda` (or `cuda:0`). Check visibility: `GET /api/experiments/device` when the API runs, or `python -c "import torch; print(torch.cuda.is_available(), torch.version.cuda)"`.
+
+**Other CUDA versions:** if `cu124` fails to install, change the `--index-url` line in `requirements-gpu-torch.txt` to the index URL from [pytorch.org](https://pytorch.org/get-started/locally/) (e.g. `cu121`).
+
+**Docker with GPU (recommended for `lightning.gpu` on Windows):**  
+NVIDIA’s **custatevec** (needed by `pennylane-lightning-gpu`) is **not** published for native Windows pip. To run the **quantum** simulator on GPU, use a **Linux** container with GPU passthrough — your code stays on the Windows disk; execution is inside Docker.
+
+1. **Docker Desktop** (Windows): use the **WSL2** backend, current **NVIDIA driver**, and enable **GPU** in Docker settings ([Docker GPU docs](https://docs.docker.com/desktop/features/gpu/)).
+2. **Linux bare metal:** install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) so `docker run --gpus all` works.
+
+Start the full stack (API + dashboard):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build -d
+```
+
+(or `./launch-gpu.sh`). Default CPU stack is unchanged: `docker compose up --build -d` or `./launch.sh`.
+
+**Verify quantum + PyTorch GPU inside the container** (from repo root):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm --build -e PYTHONPATH=/app/src api python /app/scripts/verify_gpu_smoke.py
+```
+
+Windows shortcut:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/docker-gpu-verify.ps1
+```
+
+You should see `quantum backend: lightning.gpu` in the output when the Linux image built successfully. Optional bind-mounts for live code (no image rebuild for Python edits): add `-f docker-compose.gpu.dev.yml`.
+
+**Dashboard:** the **Compute profile** control sends `compute_mode`: `auto` (default), `cpu` (force CPU + `lightning.qubit`), or `gpu` (CUDA + `lightning.gpu` when the plugin and driver allow; otherwise the training pipeline falls back automatically). Same options are available via the API field `compute_mode` on `POST /api/experiments/runs`.
+
+**Quantum GPU sim (native Windows venv):** `pip install -r requirements-gpu-quantum.txt` usually **fails** on Windows (missing `custatevec-cu12` wheels). Use **Docker GPU** above for `lightning.gpu`, or stay on **`lightning.qubit`** locally while PyTorch still uses the GPU for the classical parts.
+
+**Smoke test (host venv):** after a local GPU install, from the repo root:
+
+```bash
+python scripts/verify_gpu_smoke.py
+```
+
+Uses a tiny graph and `HybridQGNN` (`d=8`, `q=2`, `L=1`). On Windows without Docker, expect **`lightning.qubit`** even if CUDA is on. Use `python scripts/verify_gpu_smoke.py --device cpu` to force CPU.
+
+---
+
 ## Work Plan (by Checkpoints)
 
 ### 1. Literature Review and Problem Formulation  

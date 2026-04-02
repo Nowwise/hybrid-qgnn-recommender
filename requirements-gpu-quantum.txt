@@ -1,0 +1,3 @@
+# Optional GPU quantum simulator (Linux/GPU Docker; may fail on Windows — safe to skip).
+# Install after requirements-base.txt + requirements-gpu-torch.txt.
+pennylane-lightning-gpu>=0.44
