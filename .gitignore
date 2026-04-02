@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.Python
+*.so
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+runs/
+*.pt
+.DS_Store
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Local thesis / coursework context (do not publish)
+thesis_coursework_full_context.md
+**/thesis_coursework_full_context.md

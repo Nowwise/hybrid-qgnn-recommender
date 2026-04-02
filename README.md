@@ -117,6 +117,21 @@ The goal of the research is to explore whether the integration of quantum comput
 
 ---
 
+## Evaluation protocol (implemented)
+
+- **Model selection during training:** best checkpoints are chosen by **validation AUC** on the stratified user–item pair split (`lg_best.pt`, `hyb_best.pt`; rows in `metrics.csv` with `split=val`).
+- **Ranking metrics:** after training, the pipeline evaluates sampled **Recall@K** and **NDCG@K** (default K in `ranking_ks`, e.g. 5, 10, 20). Each query uses **one positive** from the evaluation split and **`ranking_negatives`** random negatives that are not in that user’s **training** positives. This is a standard **implicit-feedback** sanity check; it is **not** full-catalog ranking (which would be much more expensive).
+- **Splits:** `val_ranking` uses validation positives from the same split as training val. **`test_ranking`** (if `eval_test_ranking` is true) uses interactions from **`test.txt`**, restricted to users who appear in the training pair matrix — so it is a **held-out interaction** check, not cold-start users.
+- **Ablation:** rows for **`HybridQGNN (ablation classical head)`** run the same trained hybrid with **`force_classical`** (encoder → linear `fallback` → MLP head, **no** quantum block forward), to separate the effect of the quantum feature map from the rest of the architecture.
+- **Cost / feasibility:** **`phase_timings.json`** stores wall-clock seconds per phase (`prepare_data`, each epoch, `ranking_evaluation`, `analysis_export`). The same timings are duplicated in `metrics.csv` with `split=timing` for plotting.
+- **Tables:** `write_comparative_tables` writes `val_best_comparative.csv`, `val_metrics_per_epoch.csv`, **`ranking_comparative.csv`** (when ranking rows exist), and **`full_model_comparative.csv`** — one wide table with val@best metrics, `val_rank_*`, `test_rank_*`, and **Δ (Hybrid − LightGCN)**. The dashboard loads this (or rebuilds it from `metrics.csv` if the file is missing).
+
+### Reproducibility and variance
+
+- Each run saves **`run_config.json`** including **`seed`**. For thesis reporting of variance, re-run with different seeds (e.g. 41–45) and report mean ± std; the dashboard/API accept `seed` overrides.
+
+---
+
 ## Notes
 
 - The plan may be refined and updated during subsequent checkpoints  

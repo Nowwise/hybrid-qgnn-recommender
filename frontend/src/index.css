@@ -1,0 +1,95 @@
+/* Design tokens + base reset */
+:root {
+  --void: #060607;
+  --bg-elevated: #0c0d10;
+  --surface: #12141a;
+  --surface-hover: #181b24;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #f1f2f4;
+  --text-secondary: #9aa3b2;
+  --text-tertiary: #6b7280;
+  --amber: #e8a838;
+  --amber-dim: #c48516;
+  --amber-glow: rgba(232, 168, 56, 0.35);
+  --violet: #8b7cf8;
+  --violet-dim: #6d28d9;
+  --mint: #34d399;
+  --rose: #fb7185;
+  --font-display: "Syne", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow-lg: 0 24px 80px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 0 60px rgba(232, 168, 56, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.55;
+  font-weight: 450;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(232, 168, 56, 0.35);
+  color: var(--text);
+}
