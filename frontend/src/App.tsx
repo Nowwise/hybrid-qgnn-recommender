@@ -14,7 +14,7 @@ function StatusBadge({ label, variant }: { label: string; variant: "ok" | "bad" 
 export function App() {
   const {
     apiOk,
-    dataset,
+    datasets,
     history,
     jobs,
     activeJob,
@@ -23,7 +23,7 @@ export function App() {
     err,
     starting,
     cancelling,
-    datasetReady,
+    anyDatasetReady,
     presets,
     refresh,
     runExperiment,
@@ -49,8 +49,8 @@ export function App() {
             <span className="hero__title-accent">QGNN</span> lab
           </h1>
           <p className="hero__subtitle">
-            Compare LightGCN against the hybrid quantum–classical recommender on Amazon-Book, stream validation
-            metrics, and audit every run from one control surface.
+            Compare LightGCN against the hybrid quantum–classical recommender on Amazon-Book or MovieLens-100K
+            (same on-disk layout), stream validation metrics, and audit every run from one control surface.
           </p>
         </header>
 
@@ -67,15 +67,27 @@ export function App() {
             <div className="badge-row">
               <StatusBadge label={apiLabel} variant={apiVariant} />
               <StatusBadge
-                label={datasetReady ? "Dataset mounted" : "Dataset missing"}
-                variant={datasetReady ? "ok" : "bad"}
+                label={anyDatasetReady ? "Benchmark folder(s) ready" : "No benchmark data"}
+                variant={anyDatasetReady ? "ok" : "bad"}
               />
             </div>
-            {dataset ? (
-              <p className="path-display" title="Data directory relative to project root">
-                {dataset.data_dir}
-                {!dataset.exists ? " · path not found on server" : ""}
-              </p>
+            {datasets.length > 0 ? (
+              <ul className="dataset-list" aria-label="Benchmark datasets">
+                {datasets.map((d) => {
+                  const ok = d.train_txt && d.test_txt;
+                  return (
+                    <li
+                      key={d.data_dir}
+                      className={`path-display path-display--compact${ok ? " path-display--row-ok" : " path-display--row-bad"}`}
+                    >
+                      <span className={`mono${ok ? "" : " path-display--warn"}`}>{d.data_dir}</span>
+                      <span className="mono path-display__state">
+                        {ok ? "train.txt ✓ · test.txt ✓" : !d.exists ? "missing" : "incomplete"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             ) : (
               <div className="path-display" aria-busy="true">
                 <span className="skeleton skeleton-line" style={{ maxWidth: "14rem" }} />
@@ -91,7 +103,7 @@ export function App() {
 
         <ExperimentPanel
           presets={presets}
-          datasetReady={datasetReady}
+          datasets={datasets}
           starting={starting}
           cancelling={cancelling}
           activeJob={activeJob}

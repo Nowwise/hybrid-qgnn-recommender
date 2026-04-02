@@ -14,7 +14,7 @@ import torch
 from hybrid_qgnn.config import ExperimentConfig
 from hybrid_qgnn.data import (
     build_norm_adj_from_train_pairs,
-    load_amazon_book_dir,
+    load_lightgcn_interaction_dir,
     make_loaders,
     make_small_implicit_split,
 )
@@ -251,7 +251,7 @@ def run_experiment(
         raise ExperimentCancelled()
 
     with _timed(phase_timings, "prepare_data"):
-        (u_tr, i_tr), (u_te, i_te), n_users, n_items = load_amazon_book_dir(str(data_path))
+        (u_tr, i_tr), (u_te, i_te), n_users, n_items = load_lightgcn_interaction_dir(str(data_path))
         (Xtr, ytr), (Xva, yva) = make_small_implicit_split(
             u_tr,
             i_tr,

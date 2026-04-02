@@ -1,4 +1,7 @@
-.PHONY: up down logs build launch
+.PHONY: up down logs build launch prepare-movielens100k
+
+prepare-movielens100k:
+	python3 scripts/prepare_movielens100k.py --project-root .
 
 up:
 	docker compose up --build -d

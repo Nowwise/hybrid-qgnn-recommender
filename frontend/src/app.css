@@ -312,6 +312,40 @@
   word-break: break-all;
 }
 
+.dataset-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.path-display--compact {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.path-display__state {
+  font-size: 0.72rem;
+}
+
+.path-display--row-ok .path-display__state {
+  color: var(--mint);
+}
+
+.path-display--row-bad .path-display__state {
+  color: var(--text-secondary);
+}
+
+.path-display--warn {
+  color: var(--rose);
+}
+
 /* Buttons */
 .btn-row {
   display: flex;

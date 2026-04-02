@@ -121,3 +121,9 @@ class DatasetStatus(BaseModel):
     test_txt: bool
 
 
+class DatasetsOverview(BaseModel):
+    """Known benchmark folders under project root (LightGCN-style train.txt / test.txt)."""
+
+    datasets: List[DatasetStatus]
+
+

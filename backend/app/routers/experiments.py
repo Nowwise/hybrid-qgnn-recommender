@@ -126,7 +126,7 @@ def start_run(body: ExperimentStartBody, settings: Settings = Depends(get_settin
     if not train_f.is_file() or not test_f.is_file():
         raise HTTPException(
             status_code=400,
-            detail=f"Dataset not found. Expected {cfg.data_dir}/train.txt and test.txt under project root.",
+            detail=f"Dataset not found. Expected project_root/{cfg.data_dir}/train.txt and test.txt.",
         )
 
     def run(

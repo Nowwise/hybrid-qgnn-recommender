@@ -6,7 +6,7 @@ services:
     environment:
       QGNN_PROJECT_ROOT: /app
     volumes:
-      - ./amazon-book:/app/amazon-book:ro
+      - ./dataset:/app/dataset:ro
       - ./runs:/app/runs
     ports:
       - "127.0.0.1:8000:8000"

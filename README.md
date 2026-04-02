@@ -19,6 +19,26 @@ The goal of the research is to explore whether the integration of quantum comput
 
 ---
 
+## Datasets (`dataset/`)
+
+All benchmarks live under **`dataset/`** at the repository root — separate from `backend/`, `src/`, etc. Each benchmark is its **own subfolder** with the **same file layout**:
+
+- `train.txt` — one line per user: `u i1 i2 i3 ...` (0-based ids, implicit positives)
+- `test.txt` — same format for held-out interactions
+
+| Path (`data_dir`) | Description |
+|-------------------|-------------|
+| **`dataset/amazon-book/`** | Primary benchmark (as in related work). Ship or obtain per your setup. |
+| **`dataset/movielens-100k/`** | MovieLens-100K, implicit feedback (ratings ≥ 4), **per-user temporal leave-last-out** (last interaction → test). Generated locally — not committed if you prefer to run the script yourself. 
+
+**Create MovieLens-100K files** (writes `dataset/movielens-100k/`, downloads [GroupLens ml-100k.zip](https://grouplens.org/datasets/movielens/100k/)):
+
+Set `data_dir` to `dataset/movielens-100k` in the dashboard or API to train on that split. Default is `dataset/amazon-book`.
+
+**Docker:** `docker-compose` mounts `./dataset` → `/app/dataset` so the API sees the same paths.
+
+---
+
 ## Work Plan (by Checkpoints)
 
 ### 1. Literature Review and Problem Formulation  

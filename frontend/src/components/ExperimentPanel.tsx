@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ExperimentPresets, JobActivity, JobPublic } from "../api";
+import type { DatasetStatus, ExperimentPresets, JobActivity, JobPublic } from "../api";
 
 const INT_KEYS = new Set([
   "max_users",
@@ -29,7 +29,11 @@ const FLOAT_KEYS = new Set([
 ]);
 
 const FORM_GROUPS: { title: string; hint?: string; keys: string[] }[] = [
-  { title: "Data & I/O", keys: ["data_dir", "save_dir", "seed"] },
+  {
+    title: "Data & I/O",
+    hint: "data_dir: dataset/amazon-book or dataset/movielens-100k (train.txt + test.txt in that folder).",
+    keys: ["data_dir", "save_dir", "seed"],
+  },
   { title: "Sampling", keys: ["max_users", "max_pos_per_user", "neg_per_pos", "val_ratio"] },
   {
     title: "Training (shared)",
@@ -152,7 +156,7 @@ type PresetId = "lightweight" | "notebook" | "custom";
 
 type Props = {
   presets: ExperimentPresets | null;
-  datasetReady: boolean;
+  datasets: DatasetStatus[];
   starting: boolean;
   cancelling: boolean;
   activeJob: JobPublic | null;
@@ -162,7 +166,7 @@ type Props = {
 
 export function ExperimentPanel({
   presets,
-  datasetReady,
+  datasets,
   starting,
   cancelling,
   activeJob,
@@ -218,6 +222,10 @@ export function ExperimentPanel({
   const canCancel =
     activeJob && (activeJob.status === "running" || activeJob.status === "queued");
 
+  const dataDirKey = (form.data_dir || "dataset/amazon-book").trim();
+  const mountRow = datasets.find((d) => d.data_dir === dataDirKey);
+  const datasetReady = !!(mountRow?.train_txt && mountRow.test_txt);
+
   return (
     <section className="card" aria-labelledby="card-run-heading">
       <div className="card__head">
@@ -243,8 +251,16 @@ export function ExperimentPanel({
         separate learning rates; leave them empty to fall back to the shared base lr (hybrid also respects{" "}
         <span className="code-inline">hybrid_lr_mult</span>). For lightweight, leave{" "}
         <span className="code-inline">save_dir</span> empty to auto-create a timestamped{" "}
-        <span className="code-inline">runs/quick_*</span> folder.
+        <span className="code-inline">runs/quick_*</span> folder. Set{" "}
+        <span className="code-inline">data_dir</span> to <span className="code-inline">dataset/movielens-100k</span> after
+        running <span className="code-inline">python scripts/prepare_movielens100k.py</span> from the repo root.
       </p>
+      {!datasetReady && presets && (
+        <p className="card__body" style={{ marginTop: "0.5rem", color: "var(--rose)" }}>
+          Selected <span className="mono">{dataDirKey}</span> is missing <span className="code-inline">train.txt</span>{" "}
+          or <span className="code-inline">test.txt</span> — fix paths or choose another dataset.
+        </p>
+      )}
 
       <div className="preset-switch preset-switch--triple" role="group" aria-label="Configuration preset">
         <button

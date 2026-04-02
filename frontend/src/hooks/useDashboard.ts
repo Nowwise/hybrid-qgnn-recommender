@@ -17,7 +17,7 @@ import {
 
 export function useDashboard() {
   const [apiOk, setApiOk] = useState<boolean | null>(null);
-  const [dataset, setDataset] = useState<DatasetStatus | null>(null);
+  const [datasets, setDatasets] = useState<DatasetStatus[]>([]);
   const [presets, setPresets] = useState<ExperimentPresets | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
   const [jobs, setJobs] = useState<JobPublic[]>([]);
@@ -37,7 +37,8 @@ export function useDashboard() {
       setApiOk(false);
     }
     try {
-      setDataset(await getDatasetStatus());
+      const ds = await getDatasetStatus();
+      setDatasets(ds.datasets);
       setPresets(await getExperimentPresets());
       setHistory(await listHistory());
       setJobs(await listJobs());
@@ -68,7 +69,7 @@ export function useDashboard() {
     return () => clearInterval(t);
   }, [activeJob?.id, activeJob?.status, refresh]);
 
-  const datasetReady = !!(dataset?.train_txt && dataset?.test_txt);
+  const anyDatasetReady = datasets.some((d) => d.train_txt && d.test_txt);
 
   const runExperiment = async (body: Record<string, unknown>) => {
     setErr(null);
@@ -110,7 +111,7 @@ export function useDashboard() {
 
   return {
     apiOk,
-    dataset,
+    datasets,
     presets,
     history,
     jobs,
@@ -120,7 +121,7 @@ export function useDashboard() {
     err,
     starting,
     cancelling,
-    datasetReady,
+    anyDatasetReady,
     refresh,
     runExperiment,
     cancelRun,

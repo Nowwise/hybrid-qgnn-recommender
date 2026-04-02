@@ -7,6 +7,10 @@ export type DatasetStatus = {
   test_txt: boolean;
 };
 
+export type DatasetsOverview = {
+  datasets: DatasetStatus[];
+};
+
 export type JobStep = {
   id: string;
   label: string;
@@ -79,7 +83,7 @@ export function getHealth() {
 }
 
 export function getDatasetStatus() {
-  return fetchJson<DatasetStatus>("/datasets/status");
+  return fetchJson<DatasetsOverview>("/datasets/status");
 }
 
 export function getExperimentPresets() {

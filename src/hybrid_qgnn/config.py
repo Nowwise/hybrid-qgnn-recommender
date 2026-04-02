@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class ExperimentConfig:
-    data_dir: str = "amazon-book"
+    data_dir: str = "dataset/amazon-book"
     save_dir: str = "./runs/default"
 
     max_users: int = 6000
