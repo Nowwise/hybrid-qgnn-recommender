@@ -45,11 +45,11 @@ class ExperimentConfig:
 
     seed: int = 42
 
-    # Sampled ranking metrics (Recall@K / NDCG@K) — thesis-style implicit ranking eval
+    # Sampled ranking metrics (Recall@K / NDCG@K / HitRatio@K) — thesis-style implicit ranking eval
     eval_ranking: bool = True
     ranking_max_users: int = 512
     ranking_negatives: int = 99
-    ranking_ks: List[int] = field(default_factory=lambda: [5, 10, 20])
+    ranking_ks: List[int] = field(default_factory=lambda: [5, 10, 20, 50])
     eval_test_ranking: bool = True
     eval_hybrid_ablation: bool = True
     log_phase_timings: bool = True
@@ -87,7 +87,8 @@ class ExperimentConfig:
             hybrid_lr=None,
             hybrid_lr_mult=0.7,
             ranking_max_users=96,
-            ranking_negatives=19,
+            # Need >= max(K) so top-K metrics (e.g. @50) are well-defined (1 pos + n_neg candidates).
+            ranking_negatives=99,
         )
 
     @classmethod

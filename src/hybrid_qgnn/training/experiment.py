@@ -84,7 +84,7 @@ def _run_ranking_evaluations(
     micro_bs: int,
     logger: MetricsLogger,
 ) -> None:
-    """Load best checkpoints and log sampled Recall@K / NDCG@K (val + optional test + ablation)."""
+    """Load best checkpoints and log sampled Recall@K / NDCG@K / HitRatio@K (val + optional test + ablation)."""
     ks = tuple(int(k) for k in cfg.ranking_ks)
     train_pos = Xtr[ytr == 1]
     val_pos = Xva[yva == 1]
@@ -671,7 +671,7 @@ def run_experiment(
         f"HybridQGNN best val AUC: {best_hyb['auc']:.4f} (epoch {best_hyb['ep']})\n"
         "\n"
         "Protocol: validation AUC is used for checkpointing during training. "
-        "Sampled Recall@K / NDCG@K (see metrics.csv splits val_ranking and test_ranking) "
+        "Sampled Recall@K / NDCG@K / HitRatio@K (see metrics.csv splits val_ranking and test_ranking) "
         "use one held-out positive per user plus random negatives — standard implicit-feedback sanity check. "
         "Official test.txt interactions (users overlapping train) are used only when eval_test_ranking is true.\n"
     )

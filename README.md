@@ -71,7 +71,7 @@ Set `data_dir` to `dataset/movielens-100k` in the dashboard or API to train on t
 
 - Implementation of baseline recommendation models  
 - Training of classical graph-based models (e.g. LightGCN)  
-- Definition and calculation of evaluation metrics (AUC, Recall@K, NDCG@K)  
+- Definition and calculation of evaluation metrics (AUC, Recall@K, NDCG@K, HitRatio@K)  
 - Analysis of baseline performance  
 
 **Output:** baseline models and evaluation results
@@ -140,7 +140,7 @@ Set `data_dir` to `dataset/movielens-100k` in the dashboard or API to train on t
 ## Evaluation protocol (implemented)
 
 - **Model selection during training:** best checkpoints are chosen by **validation AUC** on the stratified user–item pair split (`lg_best.pt`, `hyb_best.pt`; rows in `metrics.csv` with `split=val`).
-- **Ranking metrics:** after training, the pipeline evaluates sampled **Recall@K** and **NDCG@K** (default K in `ranking_ks`, e.g. 5, 10, 20). Each query uses **one positive** from the evaluation split and **`ranking_negatives`** random negatives that are not in that user’s **training** positives. This is a standard **implicit-feedback** sanity check; it is **not** full-catalog ranking (which would be much more expensive).
+- **Ranking metrics:** after training, the pipeline logs **Recall@K**, **NDCG@K**, and **HitRatio@K** for each K in **`ranking_ks`** (default **5, 10, 20, 50**). With **one positive** per query, **Recall@K** and **HitRatio@K** are the same (binary hit if the true item ranks in the top-K among sampled candidates). Each query uses **one positive** from the evaluation split and **`ranking_negatives`** random negatives not in that user’s **training** positives; set **`ranking_negatives` ≥ max(K)** so top-K is meaningful (default 99). This is a standard **implicit-feedback** sampled-ranking check; it is **not** full-catalog ranking.
 - **Splits:** `val_ranking` uses validation positives from the same split as training val. **`test_ranking`** (if `eval_test_ranking` is true) uses interactions from **`test.txt`**, restricted to users who appear in the training pair matrix — so it is a **held-out interaction** check, not cold-start users.
 - **Ablation:** rows for **`HybridQGNN (ablation classical head)`** run the same trained hybrid with **`force_classical`** (encoder → linear `fallback` → MLP head, **no** quantum block forward), to separate the effect of the quantum feature map from the rest of the architecture.
 - **Cost / feasibility:** **`phase_timings.json`** stores wall-clock seconds per phase (`prepare_data`, each epoch, `ranking_evaluation`, `analysis_export`). The same timings are duplicated in `metrics.csv` with `split=timing` for plotting.

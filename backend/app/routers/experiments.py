@@ -86,6 +86,8 @@ def _merge_experiment_config(body: ExperimentStartBody, settings: Settings):
         cfg.ranking_max_users = body.ranking_max_users
     if body.ranking_negatives is not None:
         cfg.ranking_negatives = body.ranking_negatives
+    if body.ranking_ks is not None:
+        cfg.ranking_ks = list(body.ranking_ks)
     if body.eval_test_ranking is not None:
         cfg.eval_test_ranking = body.eval_test_ranking
     if body.eval_hybrid_ablation is not None:

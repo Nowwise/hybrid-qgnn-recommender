@@ -1,4 +1,4 @@
-"""Sampled ranking metrics (Recall@K, NDCG@K) for implicit recommendation evaluation."""
+"""Sampled ranking metrics (Recall@K, NDCG@K, HitRatio@K) for implicit recommendation evaluation."""
 
 from __future__ import annotations
 
@@ -61,7 +61,12 @@ def ranking_metrics_sampled(
 ) -> Dict[str, float]:
     """
     One positive per sampled user from eval_pos; candidates = 1 positive + n_negatives random negatives
-    (not in user's training positives). Averaged Recall@K and NDCG@K over queries.
+    (not in user's training positives). Averaged over queries:
+
+    - **Recall@K** / **HitRatio@K**: binary hit if the positive ranks in top-K (identical here; one relevant item).
+    - **NDCG@K**: binary relevance, DCG = 1/log2(rank+2) when rank < K else 0.
+
+    For meaningful **Recall/HR/NDCG@K**, use ``n_negatives >= K`` so the positive can rank below K.
     """
     if len(eval_pos) == 0 or len(train_pos) == 0:
         return {}
@@ -106,7 +111,8 @@ def ranking_metrics_sampled(
         pos_score = scores[0]
         rank = int((scores > pos_score).sum().item())
         for kk in ks:
-            recalls[kk].append(1.0 if rank < kk else 0.0)
+            hit = 1.0 if rank < kk else 0.0
+            recalls[kk].append(hit)
             ndcgs[kk].append((1.0 / math.log2(rank + 2)) if rank < kk else 0.0)
 
     out: Dict[str, float] = {}
@@ -114,6 +120,8 @@ def ranking_metrics_sampled(
         r = recalls[kk]
         n = ndcgs[kk]
         if r:
-            out[f"Recall@{kk}"] = float(np.mean(r))
+            mean_hit = float(np.mean(r))
+            out[f"Recall@{kk}"] = mean_hit
+            out[f"HitRatio@{kk}"] = mean_hit
             out[f"NDCG@{kk}"] = float(np.mean(n))
     return out

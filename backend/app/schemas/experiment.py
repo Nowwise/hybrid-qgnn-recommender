@@ -53,6 +53,10 @@ class ExperimentStartBody(BaseModel):
     eval_ranking: Optional[bool] = None
     ranking_max_users: Optional[int] = None
     ranking_negatives: Optional[int] = None
+    ranking_ks: Optional[List[int]] = Field(
+        default=None,
+        description="K values for Recall/NDCG/HitRatio (e.g. [10, 20, 50]); need ranking_negatives >= max(K).",
+    )
     eval_test_ranking: Optional[bool] = None
     eval_hybrid_ablation: Optional[bool] = None
     log_phase_timings: Optional[bool] = None
