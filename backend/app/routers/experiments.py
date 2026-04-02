@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
+import io
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 import re
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.core.settings import Settings, get_settings
 from app.schemas.experiment import (
@@ -353,6 +354,26 @@ def job(job_id: str):
 
 
 _ALLOWED_JOB_PLOTS = frozenset({"training_dashboard.png"})
+_ALLOWED_HISTORY_PLOTS = _ALLOWED_JOB_PLOTS
+
+
+def _full_model_comparative_dataframe(run_dir: Path) -> pd.DataFrame:
+    from hybrid_qgnn.analysis.comparative import build_full_model_comparative
+
+    full_p = run_dir / "full_model_comparative.csv"
+    if full_p.is_file():
+        return pd.read_csv(full_p)
+    metrics_p = run_dir / "metrics.csv"
+    if not metrics_p.is_file():
+        raise HTTPException(status_code=404, detail="metrics.csv not found")
+    raw = pd.read_csv(metrics_p)
+    merged = build_full_model_comparative(raw)
+    if merged is None or merged.empty:
+        raise HTTPException(
+            status_code=404,
+            detail="No comparable metrics in metrics.csv (need val classification and/or ranking rows).",
+        )
+    return merged
 
 
 @router.get("/jobs/{job_id}/live-metrics")
@@ -523,32 +544,13 @@ def run_metrics(run_id: str, settings: Settings = Depends(get_settings)):
 @router.get("/history/{run_id}/comparative")
 def run_comparative(run_id: str, settings: Settings = Depends(get_settings)):
     """Wide table: val@best metrics + val/test ranking + Δ row. Built from metrics.csv if needed."""
-    from hybrid_qgnn.analysis.comparative import build_full_model_comparative
-
     run_dir = settings.project_root / "runs" / run_id
     if not run_dir.is_dir():
         raise HTTPException(status_code=404, detail="Run not found")
 
-    def _rows(df: pd.DataFrame) -> List[Dict[str, Any]]:
-        dfo = df.astype(object).where(pd.notnull(df), None)
-        return dfo.to_dict(orient="records")
-
-    full_p = run_dir / "full_model_comparative.csv"
-    if full_p.is_file():
-        return _rows(pd.read_csv(full_p))
-
-    metrics_p = run_dir / "metrics.csv"
-    if not metrics_p.is_file():
-        raise HTTPException(status_code=404, detail="metrics.csv not found")
-
-    raw = pd.read_csv(metrics_p)
-    merged = build_full_model_comparative(raw)
-    if merged is None or merged.empty:
-        raise HTTPException(
-            status_code=404,
-            detail="No comparable metrics in metrics.csv (need val classification and/or ranking rows).",
-        )
-    return _rows(merged)
+    df = _full_model_comparative_dataframe(run_dir)
+    dfo = df.astype(object).where(pd.notnull(df), None)
+    return dfo.to_dict(orient="records")
 
 
 @router.get("/history/{run_id}/download/metrics.csv")
@@ -558,3 +560,82 @@ def download_metrics(run_id: str, settings: Settings = Depends(get_settings)):
     if not csv_path.is_file():
         raise HTTPException(status_code=404, detail="metrics.csv not found")
     return FileResponse(csv_path, filename=f"{run_id}_metrics.csv", media_type="text/csv")
+
+
+@router.get("/history/{run_id}/summary")
+def run_summary_text(run_id: str, settings: Settings = Depends(get_settings)):
+    run_dir = settings.project_root / "runs" / run_id
+    if not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Run not found")
+    rel = f"runs/{run_id}/summary.txt"
+    p = run_dir / "summary.txt"
+    if not p.is_file():
+        return {"text": None, "relative_path": rel}
+    return {
+        "text": p.read_text(encoding="utf-8", errors="replace"),
+        "relative_path": rel,
+    }
+
+
+@router.get("/history/{run_id}/phase-timings")
+def run_phase_timings(run_id: str, settings: Settings = Depends(get_settings)):
+    run_dir = settings.project_root / "runs" / run_id
+    if not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Run not found")
+    p = run_dir / "phase_timings.json"
+    if not p.is_file():
+        return {"phases": None, "relative_path": f"runs/{run_id}/phase_timings.json"}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"phases": None, "relative_path": f"runs/{run_id}/phase_timings.json"}
+    if isinstance(data, list):
+        return {"phases": data, "relative_path": f"runs/{run_id}/phase_timings.json"}
+    return {"phases": data, "relative_path": f"runs/{run_id}/phase_timings.json"}
+
+
+@router.get("/history/{run_id}/plots/{filename}")
+def history_plot_file(run_id: str, filename: str, settings: Settings = Depends(get_settings)):
+    if filename not in _ALLOWED_HISTORY_PLOTS:
+        raise HTTPException(status_code=400, detail="Unsupported plot file")
+    run_dir = (settings.project_root / "runs" / run_id).resolve()
+    proj = settings.project_root.resolve()
+    if not str(run_dir).startswith(str(proj)) or not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Run not found")
+    plot_path = (run_dir / "plots" / filename).resolve()
+    if not str(plot_path).startswith(str(run_dir)) or not plot_path.is_file():
+        raise HTTPException(status_code=404, detail="Plot not available")
+    return FileResponse(plot_path, media_type="image/png", filename=filename)
+
+
+@router.get("/history/{run_id}/download/summary.txt")
+def download_summary_txt(run_id: str, settings: Settings = Depends(get_settings)):
+    run_dir = settings.project_root / "runs" / run_id
+    p = run_dir / "summary.txt"
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="summary.txt not found")
+    return FileResponse(p, filename=f"{run_id}_summary.txt", media_type="text/plain; charset=utf-8")
+
+
+@router.get("/history/{run_id}/download/run_config.json")
+def download_run_config_json(run_id: str, settings: Settings = Depends(get_settings)):
+    run_dir = settings.project_root / "runs" / run_id
+    p = run_dir / "run_config.json"
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="run_config.json not found")
+    return FileResponse(p, filename=f"{run_id}_run_config.json", media_type="application/json")
+
+
+@router.get("/history/{run_id}/download/full_model_comparative.csv")
+def download_full_model_comparative_csv(run_id: str, settings: Settings = Depends(get_settings)):
+    run_dir = settings.project_root / "runs" / run_id
+    if not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Run not found")
+    df = _full_model_comparative_dataframe(run_dir)
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{run_id}_full_model_comparative.csv"'},
+    )

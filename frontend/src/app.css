@@ -1783,3 +1783,165 @@
 .score-pairs__result .card__head {
   margin-bottom: 0.5rem;
 }
+
+/* Coursework & report pack */
+.coursework-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.coursework-page__head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .coursework-page__head {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+}
+
+.coursework-page__title {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.35rem, 3vw, 1.65rem);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.coursework-page__lede {
+  margin: 0;
+  max-width: 42rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.coursework-card {
+  margin-bottom: 0;
+}
+
+.coursework-page__select-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.coursework-page__label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.coursework-page__select {
+  min-width: min(100%, 22rem);
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text-primary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.82rem;
+}
+
+.coursework-page__meta {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+}
+
+@media (min-width: 520px) {
+  .coursework-page__meta {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.coursework-page__meta li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.coursework-page__meta-k {
+  color: var(--text-tertiary);
+}
+
+.coursework-page__guide {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.coursework-page__guide li {
+  margin-bottom: 0.65rem;
+}
+
+.coursework-page__guide li:last-child {
+  margin-bottom: 0;
+}
+
+.coursework-page__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}
+
+.coursework-page__hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.coursework-page__cfg-val {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 36rem;
+}
+
+.coursework-page__pre {
+  margin: 0.75rem 0 0;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.coursework-page__png-frame {
+  margin-top: 0.75rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.coursework-page__png {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+.coursework-panel-wide {
+  margin-top: 0;
+}

@@ -381,8 +381,10 @@ export function LiveTrainingMonitor({ job }: { job: JobPublic }) {
       </div>
       <p className="live-monitor__hint">
         Streamed from <span className="mono">metrics.csv</span> each epoch. High-res figure:{" "}
-        <span className="mono">plots/training_dashboard.png</span>. Charts omit non-finite points; tables use fixed
-        precision for readability.
+        <span className="mono">plots/training_dashboard.png</span> (2×3: AUC, loss, sampled Recall@K / NDCG@K,{" "}
+        <span className="mono">p_quantum</span>, summary). Ranking panels use <span className="mono">val_ranking</span>{" "}
+        after training when <span className="mono">eval_ranking</span> is on. Charts omit non-finite points; tables use
+        fixed precision for readability.
       </p>
 
       <div className="live-monitor__grid">

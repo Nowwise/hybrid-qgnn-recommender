@@ -175,11 +175,16 @@ class ExperimentConfig:
 
     @classmethod
     def large(cls) -> "ExperimentConfig":
-        """Heavier thesis run: more users, wider embeddings, deeper GCN and quantum stack."""
+        """Thesis-grade run: more data coverage, BPR (LightGCN-style), ES, stronger sampled ranking.
+
+        Tuned against README evaluation protocol: val AUC for checkpointing, Recall/NDCG on
+        ``ranking_max_users`` queries with ``ranking_negatives`` ≥ max(K). Slightly higher ``wd``
+        and lower ``hybrid_lr_mult`` than the notebook preset to limit overfitting when capacity is high.
+        """
         return cls(
             save_dir="./runs/large",
-            max_users=16000,
-            max_pos_per_user=15,
+            max_users=24_000,
+            max_pos_per_user=18,
             neg_per_pos=1,
             val_ratio=0.10,
             d=128,
@@ -187,30 +192,41 @@ class ExperimentConfig:
             q=5,
             L=3,
             backend="lightning.qubit",
-            micro_bs=32,
-            epochs_lg=12,
-            epochs_hyb=8,
-            batch_size=1280,
+            micro_bs=36,
+            epochs_lg=16,
+            epochs_hyb=10,
+            batch_size=2048,
             lr=1e-3,
             lightgcn_lr=None,
             hybrid_lr=None,
-            hybrid_lr_mult=0.7,
-            wd=1e-6,
+            hybrid_lr_mult=0.6,
+            wd=1e-5,
             eval_every=1,
-            p_quantum_start=0.4,
+            p_quantum_start=0.35,
             p_quantum_end=1.0,
             seed=42,
-            ranking_max_users=768,
-            ranking_negatives=99,
+            training_loss="bpr",
+            early_stopping=True,
+            early_stopping_patience=4,
+            early_stopping_min_delta=1e-4,
+            early_stopping_monitor="val_auc",
+            ranking_max_users=1024,
+            ranking_negatives=199,
+            ranking_ks=[5, 10, 20, 50],
         )
 
     @classmethod
     def extra_large(cls) -> "ExperimentConfig":
-        """Long, high-coverage run; enable early stopping and less frequent validation by default."""
+        """Maximum default coverage: large user cap, long phase budgets, ES, hardest sampled ranking.
+
+        Uses more negatives per ranking query (still implicit-feedback sampled eval, not full catalog)
+        and optional Recall/NDCG@100. ``eval_every=1`` keeps per-epoch val curves complete for the thesis
+        dashboard; wall-clock grows vs the old ``eval_every=2`` XL preset.
+        """
         return cls(
             save_dir="./runs/extra_large",
-            max_users=30000,
-            max_pos_per_user=25,
+            max_users=50_000,
+            max_pos_per_user=28,
             neg_per_pos=1,
             val_ratio=0.10,
             d=128,
@@ -218,25 +234,27 @@ class ExperimentConfig:
             q=6,
             L=3,
             backend="lightning.qubit",
-            micro_bs=20,
-            epochs_lg=24,
-            epochs_hyb=12,
-            batch_size=768,
+            micro_bs=28,
+            epochs_lg=28,
+            epochs_hyb=14,
+            batch_size=1536,
             lr=1e-3,
             lightgcn_lr=None,
             hybrid_lr=None,
-            hybrid_lr_mult=0.7,
-            wd=1e-6,
-            eval_every=2,
-            p_quantum_start=0.4,
+            hybrid_lr_mult=0.55,
+            wd=1e-5,
+            eval_every=1,
+            p_quantum_start=0.35,
             p_quantum_end=1.0,
             seed=42,
+            training_loss="bpr",
             early_stopping=True,
-            early_stopping_patience=3,
-            early_stopping_min_delta=1e-4,
+            early_stopping_patience=5,
+            early_stopping_min_delta=8e-5,
             early_stopping_monitor="val_auc",
-            ranking_max_users=512,
-            ranking_negatives=99,
+            ranking_max_users=2048,
+            ranking_negatives=499,
+            ranking_ks=[5, 10, 20, 50, 100],
         )
 
     @classmethod

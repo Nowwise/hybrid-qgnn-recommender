@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useDashboard } from "./hooks/useDashboard";
 import { ExperimentPanel, type CloneRequestPayload } from "./components/ExperimentPanel";
+import { CourseworkPage } from "./components/CourseworkPage";
 import { SavedModelsPage } from "./components/SavedModelsPage";
 import { ScorePairsPage } from "./components/ScorePairsPage";
 import { IconAlert, IconServer, IconTable } from "./components/Icons";
@@ -14,7 +15,7 @@ function StatusBadge({ label, variant }: { label: string; variant: "ok" | "bad" 
   );
 }
 
-type AppView = "lab" | "saved_models" | "score_pairs";
+type AppView = "lab" | "saved_models" | "score_pairs" | "coursework";
 
 export function App() {
   const [view, setView] = useState<AppView>("lab");
@@ -104,6 +105,13 @@ export function App() {
             >
               Score pairs
             </button>
+            <button
+              type="button"
+              className={`app-view-nav__btn${view === "coursework" ? " app-view-nav__btn--active" : ""}`}
+              onClick={() => setView("coursework")}
+            >
+              Coursework
+            </button>
           </nav>
         </header>
 
@@ -119,6 +127,10 @@ export function App() {
         ) : null}
 
         {view === "score_pairs" ? <ScorePairsPage onBack={() => setView("lab")} /> : null}
+
+        {view === "coursework" ? (
+          <CourseworkPage history={history} onBack={() => setView("lab")} />
+        ) : null}
 
         {view === "lab" ? (
           <>

@@ -1012,6 +1012,9 @@ def run_experiment(
         logger.save_csv("metrics.csv")
         logger.save_json("metrics.json")
 
+    if cfg.live_plots:
+        refresh_training_plots(save_dir)
+
     rep.push(
         rep.M,
         "Complete",

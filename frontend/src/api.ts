@@ -243,3 +243,33 @@ export function getComparative(runId: string) {
     `/experiments/history/${encodeURIComponent(runId)}/comparative`
   );
 }
+
+export type RunSummaryTextPayload = {
+  text: string | null;
+  relative_path: string;
+};
+
+export function getRunSummaryText(runId: string) {
+  return fetchJson<RunSummaryTextPayload>(`/experiments/history/${encodeURIComponent(runId)}/summary`);
+}
+
+export type RunPhaseTimingsPayload = {
+  phases: unknown;
+  relative_path: string;
+};
+
+export function getRunPhaseTimings(runId: string) {
+  return fetchJson<RunPhaseTimingsPayload>(`/experiments/history/${encodeURIComponent(runId)}/phase-timings`);
+}
+
+/** PNG under runs/{runId}/plots/ (same allowlist as job plots). */
+export function historyPlotUrl(runId: string, filename: string, cacheBust?: number) {
+  const qs = cacheBust != null ? `?t=${cacheBust}` : "";
+  return `${BASE}/experiments/history/${encodeURIComponent(runId)}/plots/${encodeURIComponent(filename)}${qs}`;
+}
+
+export type HistoryDownloadAsset = "metrics.csv" | "summary.txt" | "run_config.json" | "full_model_comparative.csv";
+
+export function historyDownloadUrl(runId: string, asset: HistoryDownloadAsset) {
+  return `${BASE}/experiments/history/${encodeURIComponent(runId)}/download/${asset}`;
+}

@@ -951,8 +951,9 @@ export function ExperimentPanel({
 
       <p className="card__body" style={{ marginTop: 0 }}>
         Choose <strong>lightweight</strong> for a short test, <strong>notebook</strong> for the medium thesis preset,{" "}
-        <strong>large</strong> for more users and a deeper model, <strong>extra large</strong> for a long high-coverage run (early
-        stopping on by default), or <strong>custom</strong> for full defaults. Advanced rates are optional: empty LightGCN or
+        <strong>large</strong> for BPR training, more users, early stopping, and stronger sampled ranking (199 negatives/query),{" "}
+        <strong>extra large</strong> for the largest default user cap, longer budgets, Recall/NDCG through @100, and 499
+        negatives/query (ranking evaluation is slower), or <strong>custom</strong> for full defaults. Advanced rates are optional: empty LightGCN or
         hybrid rate boxes use the shared
         base learning rate (hybrid also uses the multiplier field when its own rate is empty). To label a run in history, fill{" "}
         <strong>Experiment display name</strong> and clear <strong>Output folder</strong>; a new timestamped folder under{" "}
